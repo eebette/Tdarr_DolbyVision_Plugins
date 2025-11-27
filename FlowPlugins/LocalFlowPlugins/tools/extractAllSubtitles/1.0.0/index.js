@@ -1,0 +1,247 @@
+"use strict";
+
+(function () {
+
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.plugin = exports.details = void 0;
+
+    const fs = require("fs");
+    const path = require("path");
+    const { execSync } = require("child_process");
+
+    // Log helper (mirrors console + job log)
+    function log(jobLog, msg) {
+        jobLog(msg);
+        console.log(msg);
+    }
+
+    // Resolve inputs that may be wrapped in {{{ }}} to reference args.* values
+    function resolveInput(value, args) {
+        if (typeof value !== "string") return value;
+        const match = value.match(/^\{\{\{\s*(.+?)\s*\}\}\}$/);
+        if (!match) return value;
+
+        const baseExpr = match[1].trim();
+        const attempts = [baseExpr];
+
+        // Support both args.variables.user.* (old) and args.variables.* (new)
+        const userPrefixes = ["args.variables.user.", "variables.user."];
+        userPrefixes.forEach((prefix) => {
+            if (baseExpr.startsWith(prefix)) {
+                attempts.push(baseExpr.replace(prefix, prefix.replace(".user", "")));
+            }
+        });
+
+        for (const expr of attempts) {
+            try {
+                const fn = new Function("args", `return ${expr};`);
+                const resolved = fn(args);
+                if (resolved !== undefined && resolved !== null) return resolved;
+            } catch (err) {
+                console.warn(`Failed to resolve placeholder ${value} with expr "${expr}": ${err.message}`);
+            }
+        }
+
+        return "";
+    }
+
+    // MKVINFO parser to get subtitle track numbers (for PGS conversions)
+    function getSubtitleTrackNumbers(inputPath) {
+        try {
+            const raw = execSync(`mkvinfo "${inputPath}"`, {
+                maxBuffer: 1024 * 1024 * 200
+            }).toString();
+
+            const lines = raw.split(/\r?\n/);
+            const tracks = [];
+            let current = null;
+
+            for (let lineRaw of lines) {
+                const line = lineRaw.trim();
+
+                if (line === "| + Track" || line === "+ Track") {
+                    if (current && current.track_type && current.track_number) {
+                        tracks.push(current);
+                    }
+                    current = {};
+                    continue;
+                }
+
+                if (!current) continue;
+
+                let m = line.match(/Track number:\s*([0-9]+)/);
+                if (m) {
+                    current.track_number = parseInt(m[1], 10);
+                    continue;
+                }
+
+                m = line.match(/Track type:\s*(\w+)/);
+                if (m) {
+                    current.track_type = m[1];
+                    continue;
+                }
+            }
+
+            if (current && current.track_type && current.track_number) {
+                tracks.push(current);
+            }
+
+            return tracks
+                .filter((t) => t.track_type === "subtitles")
+                .map((t) => t.track_number);
+        } catch (err) {
+            console.warn("mkvinfo failed, skipping MKV track mapping:", err.message);
+            return [];
+        }
+    }
+
+    const details = () => ({
+        name: "Extract All Subtitles to SRT",
+        description: "Extracts all subtitle streams to SRT (text copied, PGS OCR via PgsToSrt).",
+        style: { borderColor: "purple" },
+        tags: "subtitles",
+        isStartPlugin: false,
+        pType: "",
+        requiresVersion: "2.11.01",
+        sidebarPosition: 7,
+        icon: "faClosedCaptioning",
+
+        inputs: [
+            {
+                label: "Dotnet Path",
+                name: "dotnetPath",
+                tooltip: "Full path to dotnet binary used to run PgsToSrt.",
+                inputType: "string",
+                defaultValue: "{{{args.variables.dotnetBin}}}",
+                inputUI: { type: "directory" },
+            },
+            {
+                label: "PgsToSrt Path",
+                name: "pgsToSrtPath",
+                tooltip: "Full path to PgsToSrt DLL/binary.",
+                inputType: "string",
+                defaultValue: "{{{args.variables.pgsToSrtDll}}}",
+                inputUI: { type: "directory" },
+            },
+            {
+                label: "Output Directory",
+                name: "outputDirectory",
+                tooltip: "Optional: directory to place exported subtitles. Leave empty to use the Tdarr cache directory.",
+                inputType: "string",
+                defaultValue: "",
+                inputUI: { type: "directory" },
+            }
+        ],
+
+        outputs: [{ number: 1, tooltip: "Continue to next step" }],
+    });
+    exports.details = details;
+
+    const plugin = async (args) => {
+        const lib = require("../../../../../methods/lib")();
+        args.inputs = lib.loadDefaultValues(args.inputs, details);
+
+        const jobLog = args.jobLog;
+        log(jobLog, "=== Extract All Subtitles Plugin Start ===");
+
+        const ffprobe = args.inputFileObj.ffProbeData;
+        const inputPath = args.inputFileObj.file;
+        const baseName = path.basename(inputPath, path.extname(inputPath));
+
+        const configuredOutputDir = (resolveInput(args.inputs.outputDirectory, args) || "").toString().trim() || "";
+        const workDir = configuredOutputDir.length > 0 ? configuredOutputDir : args.librarySettings.cache;
+
+        try {
+            if (!fs.existsSync(workDir)) {
+                log(jobLog, `📁 Creating directory: ${workDir}`);
+                fs.mkdirSync(workDir, { recursive: true });
+            } else {
+                log(jobLog, `📂 Directory exists: ${workDir}`);
+            }
+        } catch (err) {
+            log(jobLog, `🚨 Failed to ensure directory exists: ${workDir}`);
+            console.error(err);
+        }
+
+        const subtitleStreams = ffprobe.streams.filter((s) => s.codec_type === "subtitle");
+        if (subtitleStreams.length === 0) {
+            log(jobLog, "⚠ No subtitle streams → skip");
+            return { outputFileObj: args.inputFileObj, outputNumber: 1, variables: args.variables };
+        }
+
+        // Map MKV track numbers for PGS conversion when available
+        const mkvTrackNumbers = getSubtitleTrackNumbers(inputPath);
+        for (let i = 0; i < subtitleStreams.length; i++) {
+            subtitleStreams[i].mkvTrack = mkvTrackNumbers[i];
+        }
+
+        const exportsFile = path.join(workDir, `${baseName}_subtitles.exports`);
+        fs.writeFileSync(exportsFile, ""); // clear or create
+
+        const dotnetPath = (resolveInput(args.inputs.dotnetPath, args) || "").toString().trim();
+        const pgsToSrtPath = (resolveInput(args.inputs.pgsToSrtPath, args) || "").toString().trim();
+
+        const preferredTextCodecs = ["subrip", "ass", "ssa", "srt", "text", "mov_text", "webvtt"];
+
+        for (let i = 0; i < subtitleStreams.length; i++) {
+            const s = subtitleStreams[i];
+            const codec = (s.codec_name || "").toLowerCase();
+            const lang = (s.tags?.language || "und").toLowerCase();
+            const title = s.tags?.title || "";
+            const forced = s.disposition?.forced ? 1 : 0;
+            const ffmpegIdx = s.index;
+            const mkvTrackNumber = s.mkvTrack;
+
+            const safeLang = lang || "und";
+            const outFile = `${baseName}_s${ffmpegIdx}_${safeLang}.srt`;
+            const outPath = path.join(workDir, outFile);
+
+            try {
+                if (preferredTextCodecs.includes(codec)) {
+                    log(jobLog, `✔ Converting text subtitle to SRT: idx=${ffmpegIdx}, lang=${lang}, codec=${codec}`);
+                    const cmd = [
+                        `ffmpeg -y -i "${inputPath}"`,
+                        `-map 0:${ffmpegIdx}`,
+                        `-c:s srt`,
+                        `"${outPath}"`
+                    ].join(" ");
+                    execSync(cmd, { stdio: "inherit" });
+                } else if (codec.includes("pgs") || codec.includes("hdmv")) {
+                    log(jobLog, `🖼 OCR PGS subtitle: idx=${ffmpegIdx}, lang=${lang}, mkvTrack=${mkvTrackNumber || "n/a"}`);
+                    if (!dotnetPath || !pgsToSrtPath) {
+                        throw new Error("dotnetPath or pgsToSrtPath not provided for PGS OCR");
+                    }
+                    const trackArg = mkvTrackNumber ? `--track ${mkvTrackNumber}` : `--ffmpeg-index ${ffmpegIdx}`;
+                    const cmd = `"${dotnetPath}" "${pgsToSrtPath}" ${trackArg} "${inputPath}" "${outPath}"`;
+                    execSync(cmd, { stdio: "inherit" });
+                } else {
+                    log(jobLog, `⚠ Unsupported subtitle codec ${codec} at idx=${ffmpegIdx} → skipping`);
+                    continue;
+                }
+            } catch (err) {
+                log(jobLog, `🚨 Failed processing subtitle idx=${ffmpegIdx}: ${err.message}`);
+                continue;
+            }
+
+            const line = [
+                outFile,
+                ffmpegIdx,
+                lang,
+                "srt",
+                forced,
+                title
+            ].join("|") + "\n";
+            fs.appendFileSync(exportsFile, line);
+        }
+
+        log(jobLog, "=== Extract All Subtitles Plugin End ===");
+
+        return {
+            outputFileObj: args.inputFileObj,
+            outputNumber: 1,
+            variables: args.variables
+        };
+    };
+    exports.plugin = plugin;
+
+})(); // end closure
