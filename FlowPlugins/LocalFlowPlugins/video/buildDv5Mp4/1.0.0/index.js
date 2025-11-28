@@ -201,19 +201,21 @@
         // --- Subtitle Tracks ---
         if (subtitleExists) {
             const subtitleLines = fs.readFileSync(subtitleExportsFile, "utf-8").trim().split("\n").filter(Boolean);
-            subtitleLines.forEach((line) => {
-                const [filename, , lang, codec, forced, title] = line.split("|");
-                const srtPath = path.join(subBaseDir, filename);
-                const langFlag = lang ? `:lang=${lang}` : "";
-                const forcedFlag = forced === "1" ? ":forced" : "";
+        subtitleLines.forEach((line) => {
+            const [filename, , lang, codec, forced, title] = line.split("|");
+            const srtPath = path.join(subBaseDir, filename);
+            const langFlag = lang ? `:lang=${lang}` : "";
+            const forcedFlag = forced === "1" ? ":forced" : "";
 
-                const isConverted = codec && codec.toLowerCase() === "srt";
-                const convMark = isConverted ? " (OCR)" : "";
-                const name = formatNameFlag(title, convMark);
+            const isConverted = codec && codec.toLowerCase() === "srt";
+            const convMark = isConverted ? " (OCR)" : "";
+            const baseTitle = title || (lang ? lang.toUpperCase() : "Subtitle");
+            const forcedMark = forced === "1" ? " (Forced)" : "";
+            const name = formatNameFlag(`${baseTitle}${forcedMark}`, convMark);
 
-                mp4Args.push("-add", `${srtPath}${langFlag}${forcedFlag}${name}`);
-                log(jobLog, `💬 Subtitle: ${filename} | lang=${lang} | OCR=${isConverted}`);
-            });
+            mp4Args.push("-add", `${srtPath}${langFlag}${forcedFlag}${name}`);
+            log(jobLog, `💬 Subtitle: ${filename} | lang=${lang} | OCR=${isConverted}`);
+        });
         }
 
         log(jobLog, `MP4Box: ${mp4boxPath} args: ${mp4Args.join(" ")}`);

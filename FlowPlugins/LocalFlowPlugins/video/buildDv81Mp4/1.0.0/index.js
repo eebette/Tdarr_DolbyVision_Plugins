@@ -253,7 +253,9 @@
 
             const isConverted = codec && codec.toLowerCase() === "srt";
             const convMark = isConverted ? " (OCR)" : "";
-            const name = formatNameFlag(title, convMark);
+            const baseTitle = title || (lang ? lang.toUpperCase() : "Subtitle");
+            const forcedMark = forced === "1" ? " (Forced)" : "";
+            const name = formatNameFlag(`${baseTitle}${forcedMark}`, convMark);
 
             mp4Args.push("-add", `${srtPath}${langFlag}${forcedFlag}${name}`);
             log(jobLog, `💬 Subtitle: ${filename} | lang=${lang} | OCR=${isConverted}`);
