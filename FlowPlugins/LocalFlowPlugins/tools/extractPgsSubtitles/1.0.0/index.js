@@ -14,7 +14,7 @@
 
     const fs = require("fs");
     const path = require("path");
-    const { execSync } = require("child_process");
+    const { execSync, execFileSync } = require("child_process");
 
     // Log helper (mirrors console + job log)
     function log(jobLog, msg) {
@@ -283,16 +283,16 @@
                     `🔄 OCR PGS → SRT: lang=${lang}, codec=${codec}, mkvTrack=${trackForPgsToSrt}, ffmpegIdx=${ffmpegIdx}`
                 );
 
-                const cmd = [
-                    `${dotnetPath} ${pgsToSrtPath}`,
-                    `--input "${inputPath}"`,
-                    `--output "${outFile}"`,
-                    `--track ${trackForPgsToSrt}`,
+                const argsList = [
+                    pgsToSrtPath,
+                    `--input=${inputPath}`,
+                    `--output=${outFile}`,
+                    `--track=${trackForPgsToSrt}`,
                     `--tesseractlanguage=${tLang}`,
-                    `--tesseractversion=5`
-                ].join(" ");
-
-                execSync(cmd, { stdio: "inherit" });
+                    "--tesseractversion=5"
+                ];
+                log(jobLog, `🔧 PgsToSrt args: ${argsList.join(" ")}`);
+                execFileSync(dotnetPath, argsList, { stdio: "inherit" });
             }
 
             // Append metadata (use MKV track number as the index column, per "option 3")

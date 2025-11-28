@@ -7,7 +7,7 @@
 
     const fs = require("fs");
     const path = require("path");
-    const { execSync } = require("child_process");
+    const { execSync, execFileSync } = require("child_process");
 
     // Log helper (mirrors console + job log)
     function log(jobLog, msg) {
@@ -182,6 +182,18 @@
         const pgsToSrtPath = (resolveInput(args.inputs.pgsToSrtPath, args) || "").toString().trim();
 
         const preferredTextCodecs = ["subrip", "ass", "ssa", "srt", "text", "mov_text", "webvtt"];
+        const tessLangMap = {
+            eng: "eng", en: "eng",
+            jpn: "jpn", ja: "jpn",
+            fre: "fra", fr: "fra",
+            spa: "spa", es: "spa",
+            ger: "deu", de: "deu",
+            ita: "ita", it: "ita",
+            por: "por", pt: "por",
+            chi: "chi_sim", zho: "chi_sim",
+            kor: "kor", ko: "kor",
+            und: "eng"
+        };
 
         for (let i = 0; i < subtitleStreams.length; i++) {
             const s = subtitleStreams[i];
@@ -211,15 +223,63 @@
                     if (!dotnetPath || !pgsToSrtPath) {
                         throw new Error("dotnetPath or pgsToSrtPath not provided for PGS OCR");
                     }
-                    const trackArg = mkvTrackNumber ? `--track ${mkvTrackNumber}` : `--ffmpeg-index ${ffmpegIdx}`;
-                    const cmd = `"${dotnetPath}" "${pgsToSrtPath}" ${trackArg} "${inputPath}" "${outPath}"`;
-                    execSync(cmd, { stdio: "inherit" });
+
+                    const tessLang = tessLangMap[safeLang] || "eng";
+                    const attempted = new Set(); // avoid duplicate invocations
+                    const attemptOrder = [];
+                    const primaryTrack = mkvTrackNumber ?? (typeof ffmpegIdx === "number" ? ffmpegIdx + 1 : undefined);
+                    if (primaryTrack !== undefined) attemptOrder.push({ label: `track ${primaryTrack}`, flag: [`--track=${primaryTrack}`] });
+                    if (mkvTrackNumber && mkvTrackNumber > 0) {
+                        const zeroBased = mkvTrackNumber - 1;
+                        attemptOrder.push({ label: `track ${zeroBased} (zero-based fallback)`, flag: [`--track=${zeroBased}`] });
+                    }
+
+                    let ocrSuccess = false;
+                    let lastErr = null;
+
+                    for (const attempt of attemptOrder) {
+                        const attemptKey = attempt.flag.join(":");
+                        if (attempted.has(attemptKey)) continue;
+                        attempted.add(attemptKey);
+                        try {
+                            const argsList = [
+                                pgsToSrtPath,
+                                ...attempt.flag,
+                                `--input=${inputPath}`,
+                                `--output=${outPath}`,
+                                `--tesseractlanguage=${tessLang}`,
+                                "--tesseractversion=5"
+                            ];
+                            log(jobLog, `🔄 PgsToSrt ${attempt.label} → ${argsList.join(" ")}`);
+                            execFileSync(dotnetPath, argsList, { stdio: "inherit" });
+
+                            if (fs.existsSync(outPath)) {
+                                ocrSuccess = true;
+                                break;
+                            }
+                            log(jobLog, `⚠ PgsToSrt finished with no output for ${attempt.label}`);
+                        } catch (err) {
+                            lastErr = err;
+                            log(jobLog, `🚨 PgsToSrt failed for ${attempt.label}: ${err.message}`);
+                        }
+                    }
+
+                    if (!ocrSuccess) {
+                        const errMsg = lastErr?.message || "no output produced";
+                        log(jobLog, `🚫 Failed OCR for subtitle idx=${ffmpegIdx}: ${errMsg}`);
+                        continue;
+                    }
                 } else {
                     log(jobLog, `⚠ Unsupported subtitle codec ${codec} at idx=${ffmpegIdx} → skipping`);
                     continue;
                 }
             } catch (err) {
                 log(jobLog, `🚨 Failed processing subtitle idx=${ffmpegIdx}: ${err.message}`);
+                continue;
+            }
+
+            if (!fs.existsSync(outPath)) {
+                log(jobLog, `🚫 Expected output missing, not adding to manifest: ${outPath}`);
                 continue;
             }
 
