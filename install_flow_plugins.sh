@@ -14,21 +14,45 @@ if [[ ! -d "$tdarr_root" ]]; then
   exit 1
 fi
 
-repo_url="https://github.com/eebette/Tdarr_DolbyVision_Plugins/archive/refs/heads/main.tar.gz"
+urls=(
+  "https://codeload.github.com/eebette/Tdarr_DolbyVision_Plugins/tar.gz/refs/heads/main"
+  "https://codeload.github.com/eebette/Tdarr_DolbyVision_Plugins/tar.gz/refs/heads/master"
+  "https://github.com/eebette/Tdarr_DolbyVision_Plugins/archive/refs/heads/main.tar.gz"
+  "https://github.com/eebette/Tdarr_DolbyVision_Plugins/archive/refs/heads/master.tar.gz"
+)
 tmp_dir="$(mktemp -d)"
 cleanup() { rm -rf "$tmp_dir"; }
 trap cleanup EXIT
 
 archive_path="$tmp_dir/repo.tar.gz"
 
-if command -v curl >/dev/null 2>&1; then
-  echo "Downloading plugins archive with curl..."
-  curl -L "$repo_url" -o "$archive_path"
-elif command -v wget >/dev/null 2>&1; then
-  echo "Downloading plugins archive with wget..."
-  wget -O "$archive_path" "$repo_url"
-else
-  echo "Error: need curl or wget to download $repo_url" >&2
+download_ok=false
+for archive_url in "${urls[@]}"; do
+  echo "Attempting download: $archive_url"
+  if command -v curl >/dev/null 2>&1; then
+    if curl -fL "$archive_url" -o "$archive_path"; then
+      download_ok=true
+    fi
+  elif command -v wget >/dev/null 2>&1; then
+    if wget -O "$archive_path" "$archive_url"; then
+      download_ok=true
+    fi
+  else
+    echo "Error: need curl or wget to download archives." >&2
+    exit 1
+  fi
+
+  if $download_ok && tar -tzf "$archive_path" >/dev/null 2>&1; then
+    echo "Download and archive check succeeded."
+    break
+  else
+    echo "Warning: failed to fetch or validate archive from $archive_url, trying next..."
+    download_ok=false
+  fi
+done
+
+if ! $download_ok; then
+  echo "Error: could not download a valid archive from any known URL." >&2
   exit 1
 fi
 
