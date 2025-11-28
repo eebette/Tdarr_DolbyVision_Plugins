@@ -1,0 +1,646 @@
+{
+  "_id": "4yczeX2r2",
+  "name": "Main (duplicate)",
+  "description": "Main (duplicate)",
+  "tags": "",
+  "flowPlugins": [
+    {
+      "name": "✅ DV8.1 in MP4 is direct playable by modern TVs",
+      "sourceRepo": "Community",
+      "pluginName": "comment",
+      "version": "1.0.0",
+      "id": "t1UhQ0cVi",
+      "position": {
+        "x": 384,
+        "y": 1032
+      },
+      "fpEnabled": true
+    },
+    {
+      "name": "Replace Original File",
+      "sourceRepo": "Community",
+      "pluginName": "replaceOriginalFile",
+      "version": "1.0.0",
+      "id": "-poZ_x_sI",
+      "position": {
+        "x": 360,
+        "y": 1836
+      },
+      "fpEnabled": true
+    },
+    {
+      "name": "Extract HEVC",
+      "sourceRepo": "Local",
+      "pluginName": "extractHevc",
+      "version": "1.0.0",
+      "id": "2Ndpc0TBQ",
+      "position": {
+        "x": 708,
+        "y": 972
+      },
+      "fpEnabled": true
+    },
+    {
+      "name": "Install DV Tools",
+      "sourceRepo": "Local",
+      "pluginName": "installDvTools",
+      "version": "1.0.0",
+      "id": "95mkh_zXG",
+      "position": {
+        "x": 708,
+        "y": 900
+      },
+      "fpEnabled": true
+    },
+    {
+      "name": "Fix English Subtitles",
+      "sourceRepo": "Local",
+      "pluginName": "fixEnglishSubtitles",
+      "version": "1.0.0",
+      "id": "ucGE25tCh",
+      "position": {
+        "x": 276,
+        "y": 1260
+      },
+      "fpEnabled": true
+    },
+    {
+      "name": "Extract All Subtitles to SRT",
+      "sourceRepo": "Local",
+      "pluginName": "extractAllSubtitles",
+      "version": "1.0.0",
+      "id": "GtsQe9n7N",
+      "position": {
+        "x": 276,
+        "y": 1188
+      },
+      "fpEnabled": true
+    },
+    {
+      "name": "Extract Audio Tracks",
+      "sourceRepo": "Local",
+      "pluginName": "extractAudioTracks",
+      "version": "1.0.0",
+      "id": "OxWjUvIj0",
+      "position": {
+        "x": 276,
+        "y": 1116
+      },
+      "fpEnabled": true
+    },
+    {
+      "name": "Extract HEVC",
+      "sourceRepo": "Local",
+      "pluginName": "extractHevc",
+      "version": "1.0.0",
+      "id": "VfegYluB1",
+      "position": {
+        "x": 276,
+        "y": 972
+      },
+      "fpEnabled": true
+    },
+    {
+      "name": "Install DV Tools",
+      "sourceRepo": "Local",
+      "pluginName": "installDvTools",
+      "version": "1.0.0",
+      "id": "-cANxGo8Q",
+      "position": {
+        "x": 276,
+        "y": 900
+      },
+      "fpEnabled": true
+    },
+    {
+      "name": "Check Container is mp4",
+      "sourceRepo": "Community",
+      "pluginName": "checkFlowVariable",
+      "version": "1.0.0",
+      "id": "vQ3exiEoh",
+      "position": {
+        "x": 192,
+        "y": 744
+      },
+      "fpEnabled": true,
+      "inputsDB": {
+        "variable": "{{{args.inputFileObj.container}}}",
+        "value": "mp4"
+      }
+    },
+    {
+      "name": "Replace Original File",
+      "sourceRepo": "Community",
+      "pluginName": "replaceOriginalFile",
+      "version": "1.0.0",
+      "id": "hm6JQvXjN",
+      "position": {
+        "x": 144,
+        "y": 1836
+      },
+      "fpEnabled": true
+    },
+    {
+      "name": "Check File Ext. is mp4",
+      "sourceRepo": "Community",
+      "pluginName": "checkFileExtension",
+      "version": "1.0.0",
+      "id": "K-rGwvVpK",
+      "position": {
+        "x": 168,
+        "y": 1692
+      },
+      "fpEnabled": true,
+      "inputsDB": {
+        "extensions": "mp4"
+      }
+    },
+    {
+      "name": "Rename File to mp4",
+      "sourceRepo": "Community",
+      "pluginName": "renameFile",
+      "version": "1.0.0",
+      "id": "s8_VMInyM",
+      "position": {
+        "x": 240,
+        "y": 1764
+      },
+      "fpEnabled": true,
+      "inputsDB": {
+        "fileRename": "${fileName}.mp4"
+      }
+    },
+    {
+      "name": "Check Container is mp4",
+      "sourceRepo": "Community",
+      "pluginName": "checkFlowVariable",
+      "version": "1.0.0",
+      "id": "ulLD3YxdY",
+      "position": {
+        "x": 408,
+        "y": 816
+      },
+      "fpEnabled": true,
+      "inputsDB": {
+        "variable": "{{{args.inputFileObj.container}}}",
+        "value": "mp4"
+      }
+    },
+    {
+      "name": "Input File",
+      "sourceRepo": "Community",
+      "pluginName": "inputFile",
+      "version": "1.0.0",
+      "id": "pkrpDCtya",
+      "position": {
+        "x": 576,
+        "y": 456
+      },
+      "fpEnabled": true,
+      "inputsDB": {
+        "fileAccessChecks": "true",
+        "pauseNodeIfAccessChecksFail": "true"
+      }
+    },
+    {
+      "name": "Check Dolby Vision 8.1",
+      "sourceRepo": "Local",
+      "pluginName": "checkDolbyVision81",
+      "version": "1.0.0",
+      "id": "JB02LUTQE",
+      "position": {
+        "x": 504,
+        "y": 744
+      },
+      "fpEnabled": true
+    },
+    {
+      "name": "Check Codec is HEVC",
+      "sourceRepo": "Community",
+      "pluginName": "checkVideoCodec",
+      "version": "1.0.0",
+      "id": "AV3nqGkBa",
+      "position": {
+        "x": 312,
+        "y": 600
+      },
+      "fpEnabled": true
+    },
+    {
+      "name": "Check Dolby Vision",
+      "sourceRepo": "Local",
+      "pluginName": "checkDolbyVision",
+      "version": "1.0.0",
+      "id": "hWIdf0ykf",
+      "position": {
+        "x": 576,
+        "y": 528
+      },
+      "fpEnabled": true
+    },
+    {
+      "name": "Install DV Tools",
+      "sourceRepo": "Local",
+      "pluginName": "installDvTools",
+      "version": "1.0.0",
+      "id": "W10qxy10C",
+      "position": {
+        "x": 492,
+        "y": 900
+      },
+      "fpEnabled": true
+    },
+    {
+      "name": "Extract HEVC",
+      "sourceRepo": "Local",
+      "pluginName": "extractHevc",
+      "version": "1.0.0",
+      "id": "vSmeTbrj_",
+      "position": {
+        "x": 492,
+        "y": 972
+      },
+      "fpEnabled": true
+    },
+    {
+      "name": "Extract Audio Tracks",
+      "sourceRepo": "Local",
+      "pluginName": "extractAudioTracks",
+      "version": "1.0.0",
+      "id": "AMMhkJj-X",
+      "position": {
+        "x": 492,
+        "y": 1116
+      },
+      "fpEnabled": true
+    },
+    {
+      "name": "Extract All Subtitles to SRT",
+      "sourceRepo": "Local",
+      "pluginName": "extractAllSubtitles",
+      "version": "1.0.0",
+      "id": "wWbg_zInF",
+      "position": {
+        "x": 492,
+        "y": 1188
+      },
+      "fpEnabled": true
+    },
+    {
+      "name": "Fix English Subtitles",
+      "sourceRepo": "Local",
+      "pluginName": "fixEnglishSubtitles",
+      "version": "1.0.0",
+      "id": "RyisQNDTy",
+      "position": {
+        "x": 492,
+        "y": 1260
+      },
+      "fpEnabled": true
+    },
+    {
+      "name": "Build DV8.1 MP4",
+      "sourceRepo": "Local",
+      "pluginName": "buildDv81Mp4",
+      "version": "1.0.0",
+      "id": "qc5dGyzA-",
+      "position": {
+        "x": 492,
+        "y": 1332
+      },
+      "fpEnabled": true,
+      "inputsDB": {
+        "deleteSourcesAfterRemux": "true"
+      }
+    },
+    {
+      "name": "Check Dolby Vision 5",
+      "sourceRepo": "Local",
+      "pluginName": "checkDolbyVision5",
+      "version": "1.0.0",
+      "id": "x5fKbwX8g",
+      "position": {
+        "x": 288,
+        "y": 672
+      },
+      "fpEnabled": true
+    },
+    {
+      "name": "Build DV5 MP4",
+      "sourceRepo": "Local",
+      "pluginName": "buildDv5Mp4",
+      "version": "1.0.0",
+      "id": "-z6gCKuMe",
+      "position": {
+        "x": 276,
+        "y": 1332
+      },
+      "fpEnabled": true
+    },
+    {
+      "name": "Convert HEVC to DV8.1",
+      "sourceRepo": "Local",
+      "pluginName": "convertHevcTo81",
+      "version": "1.0.0",
+      "id": "Xh0531Z0A",
+      "position": {
+        "x": 708,
+        "y": 1044
+      },
+      "fpEnabled": true
+    },
+    {
+      "name": "Do Something Else",
+      "sourceRepo": "Community",
+      "pluginName": "comment",
+      "version": "1.0.0",
+      "id": "_3Bc9awhQ",
+      "position": {
+        "x": 648,
+        "y": 600
+      },
+      "fpEnabled": true
+    },
+    {
+      "name": "As of Nov. 2025, there is no reliable technology available for converting DV in AV1, etc to HEVC",
+      "sourceRepo": "Community",
+      "pluginName": "comment",
+      "version": "1.0.0",
+      "id": "ayJgAztdX",
+      "position": {
+        "x": 648,
+        "y": 672
+      },
+      "fpEnabled": true
+    },
+    {
+      "name": "✅ DV5 in MP4 is direct playable by modern TVs",
+      "sourceRepo": "Community",
+      "pluginName": "comment",
+      "version": "1.0.0",
+      "id": "S1UrN8jVk",
+      "position": {
+        "x": 168,
+        "y": 852
+      },
+      "fpEnabled": true
+    },
+    {
+      "name": "⚠️ Non-DV8.1/5 profiles (DV8.x and DV7) need to be converted using `dovi_tool`",
+      "sourceRepo": "Community",
+      "pluginName": "comment",
+      "version": "1.0.0",
+      "id": "R1Q74kwOz",
+      "position": {
+        "x": 876,
+        "y": 1020
+      },
+      "fpEnabled": true
+    },
+    {
+      "name": "Standard remuxing pipeline for converting Dolby Vision in mkv to mp4 →\n\n1️⃣ Extract HEVC from MKV\n\n\n\n\n\n\n\n2️⃣ Extract and convert TrueHD and DTS HD Audio streams to EAC3\n\n\n3️⃣ Extract PGS subtitles to SRT using OCR\n\n\n4️⃣ (Optional) Apply common OCR fixes to SRT subtitles\n\n5️⃣ 🎉 Generate the MP4 file from the converted HEVC, audio, and subtitle stream using MP4Box",
+      "sourceRepo": "Community",
+      "pluginName": "comment",
+      "version": "1.0.0",
+      "id": "YUOuxBcG4",
+      "position": {
+        "x": 48,
+        "y": 900
+      },
+      "fpEnabled": true
+    }
+  ],
+  "flowEdges": [
+    {
+      "source": "JB02LUTQE",
+      "sourceHandle": "1",
+      "target": "ulLD3YxdY",
+      "targetHandle": null,
+      "id": "lhleV__MP"
+    },
+    {
+      "source": "K-rGwvVpK",
+      "sourceHandle": "2",
+      "target": "s8_VMInyM",
+      "targetHandle": null,
+      "id": "stU-DRWpv"
+    },
+    {
+      "source": "hWIdf0ykf",
+      "sourceHandle": "1",
+      "target": "AV3nqGkBa",
+      "targetHandle": null,
+      "id": "SbLZvukRl"
+    },
+    {
+      "source": "ulLD3YxdY",
+      "sourceHandle": "2",
+      "target": "W10qxy10C",
+      "targetHandle": null,
+      "id": "Suz70BDX2"
+    },
+    {
+      "source": "W10qxy10C",
+      "sourceHandle": "1",
+      "target": "vSmeTbrj_",
+      "targetHandle": null,
+      "id": "1MztIzGB0"
+    },
+    {
+      "source": "AMMhkJj-X",
+      "sourceHandle": "1",
+      "target": "wWbg_zInF",
+      "targetHandle": null,
+      "id": "yd9IAjhiZ"
+    },
+    {
+      "source": "wWbg_zInF",
+      "sourceHandle": "1",
+      "target": "RyisQNDTy",
+      "targetHandle": null,
+      "id": "CU17rdbFf"
+    },
+    {
+      "source": "RyisQNDTy",
+      "sourceHandle": "1",
+      "target": "qc5dGyzA-",
+      "targetHandle": null,
+      "id": "m_LmilMer"
+    },
+    {
+      "source": "x5fKbwX8g",
+      "sourceHandle": "1",
+      "target": "vQ3exiEoh",
+      "targetHandle": null,
+      "id": "fAgPvrzlR"
+    },
+    {
+      "source": "vSmeTbrj_",
+      "sourceHandle": "1",
+      "target": "AMMhkJj-X",
+      "targetHandle": null,
+      "id": "ZTWGpyO-m"
+    },
+    {
+      "source": "-cANxGo8Q",
+      "sourceHandle": "1",
+      "target": "VfegYluB1",
+      "targetHandle": null,
+      "id": "GDQheCx_4"
+    },
+    {
+      "source": "VfegYluB1",
+      "sourceHandle": "1",
+      "target": "OxWjUvIj0",
+      "targetHandle": null,
+      "id": "2TnAoZsIE"
+    },
+    {
+      "source": "OxWjUvIj0",
+      "sourceHandle": "1",
+      "target": "GtsQe9n7N",
+      "targetHandle": null,
+      "id": "eXz_O6rUD"
+    },
+    {
+      "source": "GtsQe9n7N",
+      "sourceHandle": "1",
+      "target": "ucGE25tCh",
+      "targetHandle": null,
+      "id": "XeI82ZsdD"
+    },
+    {
+      "source": "vQ3exiEoh",
+      "sourceHandle": "2",
+      "target": "-cANxGo8Q",
+      "targetHandle": null,
+      "id": "vkhCCmaC4"
+    },
+    {
+      "source": "Xh0531Z0A",
+      "sourceHandle": "1",
+      "target": "AMMhkJj-X",
+      "targetHandle": null,
+      "id": "v6cGgOop-"
+    },
+    {
+      "source": "2Ndpc0TBQ",
+      "sourceHandle": "1",
+      "target": "Xh0531Z0A",
+      "targetHandle": null,
+      "id": "tgvyIW9Gn"
+    },
+    {
+      "source": "95mkh_zXG",
+      "sourceHandle": "1",
+      "target": "2Ndpc0TBQ",
+      "targetHandle": null,
+      "id": "BNGWApv71"
+    },
+    {
+      "source": "AV3nqGkBa",
+      "sourceHandle": "1",
+      "target": "x5fKbwX8g",
+      "targetHandle": null,
+      "id": "egpWMETQa"
+    },
+    {
+      "source": "x5fKbwX8g",
+      "sourceHandle": "2",
+      "target": "JB02LUTQE",
+      "targetHandle": null,
+      "id": "oPpZ3ycAO"
+    },
+    {
+      "source": "JB02LUTQE",
+      "sourceHandle": "2",
+      "target": "95mkh_zXG",
+      "targetHandle": null,
+      "id": "lfbCf9Dqm"
+    },
+    {
+      "source": "ucGE25tCh",
+      "sourceHandle": "1",
+      "target": "-z6gCKuMe",
+      "targetHandle": null,
+      "id": "qBczJ04My"
+    },
+    {
+      "source": "s8_VMInyM",
+      "sourceHandle": "1",
+      "target": "hm6JQvXjN",
+      "targetHandle": null,
+      "id": "Kku51EDVj"
+    },
+    {
+      "source": "K-rGwvVpK",
+      "sourceHandle": "1",
+      "target": "hm6JQvXjN",
+      "targetHandle": null,
+      "id": "DR8QP49qf"
+    },
+    {
+      "source": "-z6gCKuMe",
+      "sourceHandle": "1",
+      "target": "-poZ_x_sI",
+      "targetHandle": null,
+      "id": "sRckZLY8B"
+    },
+    {
+      "source": "qc5dGyzA-",
+      "sourceHandle": "1",
+      "target": "-poZ_x_sI",
+      "targetHandle": null,
+      "id": "qLDVdKf0_"
+    },
+    {
+      "source": "pkrpDCtya",
+      "sourceHandle": "1",
+      "target": "hWIdf0ykf",
+      "targetHandle": null,
+      "id": "pWrdxv_rF"
+    },
+    {
+      "source": "hWIdf0ykf",
+      "sourceHandle": "2",
+      "target": "_3Bc9awhQ",
+      "targetHandle": null,
+      "id": "nREhX5bo4"
+    },
+    {
+      "source": "AV3nqGkBa",
+      "sourceHandle": "2",
+      "target": "ayJgAztdX",
+      "targetHandle": null,
+      "id": "sVTNVYycU"
+    },
+    {
+      "source": "vQ3exiEoh",
+      "sourceHandle": "1",
+      "target": "S1UrN8jVk",
+      "targetHandle": null,
+      "id": "dzVUQfbP6"
+    },
+    {
+      "source": "S1UrN8jVk",
+      "sourceHandle": "1",
+      "target": "K-rGwvVpK",
+      "targetHandle": null,
+      "id": "GIzB7qeGo"
+    },
+    {
+      "source": "ulLD3YxdY",
+      "sourceHandle": "1",
+      "target": "t1UhQ0cVi",
+      "targetHandle": null,
+      "id": "ipyykJgsh"
+    },
+    {
+      "source": "t1UhQ0cVi",
+      "sourceHandle": "1",
+      "target": "K-rGwvVpK",
+      "targetHandle": null,
+      "id": "_gYJZLW9U"
+    }
+  ]
+}

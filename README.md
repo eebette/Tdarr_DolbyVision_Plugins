@@ -1,8 +1,8 @@
-# Tdarr Dolby Vision Flow Plugins
+# Tdarr Dolby Vision Flow Plugins 🎬
 
 ![flow.gif](doc/assets/flow.gif)
 
-Flow plugins for Tdarr focused on Dolby Vision: detect profiles, convert Dolby Vision streams safely, and remux to device-friendly MP4 while keeping audio/subtitle metadata intact.
+Flow plugins for Tdarr focused on Dolby Vision: detect profiles, convert Dolby Vision streams safely, and remux to device-friendly MP4 while keeping audio/subtitle metadata intact. 🎯
 
 I found that existing tooling for handling Dolby Vision is fragmented and hard to follow, especially when it comes to managing media in Tdarr. 
 
@@ -10,22 +10,24 @@ There are a lot of high quality media releases that come across in native DV7, w
 
 Check your model for codec support.
 
-## Install
+## Install 🛠️
 Prereqs: `curl` or `wget`, and `tar` (standard on most distros).
 
 1) Run the installer; it downloads the latest plugins from `https://github.com/eebette/Tdarr_DolbyVision_Plugins` (no git required—curl/wget + tar) and copies only the plugin `index.js` files into Tdarr:
    ```bash
-   ./scripts/install_flow_plugins.sh /path/to/tdarr/server
+   ./install_flow_plugins.sh /path/to/tdarr/server
    ```
    Example: `/opt/tdarr` ⇒ `/opt/tdarr/Tdarr/Plugins/FlowPlugins`.
 2) Restart Tdarr so the flows appear in the UI.
+3) Optional: import the example flow from `DolbyVisionFlow.txt` in Tdarr:
+   - Tdarr → Flows → Flow + → Import JSON Template + → paste the contents of `DolbyVisionFlow.txt` → click + (bottom-left of the textbox).
 
 ## How these flows are meant to be used
 - Filters decide which Dolby Vision profile a file carries so you can branch flows cleanly.
 - Tools extract or normalize video/audio/subtitles and manipulate Dolby Vision RPUs.
 - Builders remux to MP4 with MP4Box and explicit Dolby Vision profile flags for maximum compatibility.
 
-## Plugin catalog
+## Plugin catalog 📦
 ### Video filters and builders
 - `video/checkDolbyVision`: Detects any Dolby Vision metadata (any profile) and routes yes/no. Useful as the first branch in a flow.
 - `video/checkDolbyVision5`: Routes files that are specifically Dolby Vision Profile 5; everything else goes to the alternate path.
@@ -46,12 +48,12 @@ Prereqs: `curl` or `wget`, and `tar` (standard on most distros).
 - `tools/extractPgsSubtitles`: Exports one subtitle per language, preferring text codecs and OCR-ing PGS to SRT with tesseract language selection, writing `subtitles.exports`.
 - `tools/fixEnglishSubtitles`: Cleans common English OCR errors in SRT files listed in `subtitles.exports` with conservative (but common) character/word fixes.
 
-## Typical flow examples
+## Typical flow examples 🔄
 - DV7/DV8.x source → `checkDolbyVision7` → `extractHevc` + `extractRpu` → `convertHevcTo81` → `injectRpuIntoHevc` → `extractAudioTracks` + `extractAllSubtitles` → `buildDv81Mp4`.
 - DV5 source → `checkDolbyVision5` → `extractHevc` (copy) + `extractAudioTracks` + `extractAllSubtitles` → `buildDv5Mp4`.
 - DV8 source → Same as DV5 source but with `buildDv81Mp4` instead.
 
-## Acknowledgements
+## Acknowledgements 🙏
 - Community Dolby Vision knowledge bases and discussions.
 - Reddit thread on DV P7→8.1/MP4Box: https://old.reddit.com/r/ffmpeg/comments/11gu4o4/convert_dv_profile_7_to_81_using_dovi_tool_mp4box/jn5gman/
 - dvmkv2mp4: https://github.com/gacopl/dvmkv2mp4
