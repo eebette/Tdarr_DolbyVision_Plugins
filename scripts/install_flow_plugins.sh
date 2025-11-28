@@ -14,15 +14,35 @@ if [[ ! -d "$tdarr_root" ]]; then
   exit 1
 fi
 
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="$(cd "$script_dir/.." && pwd)"
-source_dir="$repo_root/FlowPlugins"
-dest_dir="$tdarr_root/Tdarr/Plugins/FlowPlugins"
+repo_url="https://github.com/eebette/Tdarr_DolbyVision_Plugins/archive/refs/heads/main.tar.gz"
+tmp_dir="$(mktemp -d)"
+cleanup() { rm -rf "$tmp_dir"; }
+trap cleanup EXIT
 
-if [[ ! -d "$source_dir" ]]; then
-  echo "Error: source directory not found: $source_dir" >&2
+archive_path="$tmp_dir/repo.tar.gz"
+
+if command -v curl >/dev/null 2>&1; then
+  echo "Downloading plugins archive with curl..."
+  curl -L "$repo_url" -o "$archive_path"
+elif command -v wget >/dev/null 2>&1; then
+  echo "Downloading plugins archive with wget..."
+  wget -O "$archive_path" "$repo_url"
+else
+  echo "Error: need curl or wget to download $repo_url" >&2
   exit 1
 fi
+
+echo "Extracting archive..."
+tar -xzf "$archive_path" -C "$tmp_dir"
+
+# Locate FlowPlugins directory inside the extracted tree
+source_dir="$(find "$tmp_dir" -maxdepth 2 -type d -name FlowPlugins | head -n 1 || true)"
+if [[ -z "$source_dir" || ! -d "$source_dir" ]]; then
+  echo "Error: source directory not found after extract." >&2
+  exit 1
+fi
+
+dest_dir="$tdarr_root/Tdarr/Plugins/FlowPlugins"
 
 mkdir -p "$dest_dir"
 

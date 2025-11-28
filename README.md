@@ -1,14 +1,24 @@
 # Tdarr Dolby Vision Flow Plugins
+
+![flow.gif](doc/assets/flow.gif)
+
 Flow plugins for Tdarr focused on Dolby Vision: detect profiles, convert Dolby Vision streams safely, and remux to device-friendly MP4 while keeping audio/subtitle metadata intact.
 
+I found that existing tooling for handling Dolby Vision is fragmented and hard to follow, especially when it comes to managing media in Tdarr. 
+
+There are a lot of high quality media releases that come across in native DV7, which isn't supported by many media players, such as LG OLED models. These tools can be used to convert DV7 and DV8.x media into DV8.1, which can be played directly over Jellyfin or Plex on many modern sets. 
+
+Check your model for codec support.
+
 ## Install
-1) Clone this repo on your Tdarr host.  
-2) Run the installer to copy only the plugin `index.js` files into Tdarr:
+Prereqs: `curl` or `wget`, and `tar` (standard on most distros).
+
+1) Run the installer; it downloads the latest plugins from `https://github.com/eebette/Tdarr_DolbyVision_Plugins` (no git required—curl/wget + tar) and copies only the plugin `index.js` files into Tdarr:
    ```bash
    ./scripts/install_flow_plugins.sh /path/to/tdarr/server
    ```
    Example: `/opt/tdarr` ⇒ `/opt/tdarr/Tdarr/Plugins/FlowPlugins`.
-3) Restart Tdarr so the flows appear in the UI.
+2) Restart Tdarr so the flows appear in the UI.
 
 ## How these flows are meant to be used
 - Filters decide which Dolby Vision profile a file carries so you can branch flows cleanly.
@@ -22,7 +32,7 @@ Flow plugins for Tdarr focused on Dolby Vision: detect profiles, convert Dolby V
 - `video/checkDolbyVision7`: Routes files that are Dolby Vision Profile 7 (dual layer or single), otherwise sends to the non-DV7 path.
 - `video/checkDolbyVision81`: Routes files that are Dolby Vision Profile 8.1; everything else goes to the alternate path.
 - `video/checkDolbyVision8x`: Routes files that are Dolby Vision Profile 8.x but not 8.1 (e.g., 8.2/8.4) so you can convert or reject as needed.
-- `video/buildDv81Mp4`: Final remux step that reads `audio.exports` and `subtitles.exports`, then uses MP4Box to produce a Dolby Vision 8.1 MP4 with proper language tags and track titles.
+- `video/buildDv81Mp4`: Final remux step that reads `audio.exports` and `subtitles.exports` manifest files created by `Extract Audio Tracks` and `Extract All/PGS Subtitles`, respectively, then uses MP4Box to produce a Dolby Vision 8.1 MP4 with proper language tags and track titles.
 - `video/buildDv5Mp4`: Similar to the 8.1 builder but targets Dolby Vision Profile 5 MP4 outputs using MP4Box with profile flags and clean track metadata.
 
 ### Tools
@@ -34,12 +44,12 @@ Flow plugins for Tdarr focused on Dolby Vision: detect profiles, convert Dolby V
 - `tools/extractAudioTracks`: Extracts audio tracks with ffmpeg into discrete files and writes `audio.exports` metadata; optionally converts TrueHD/DTS to E-AC-3 for compatibility.
 - `tools/extractAllSubtitles`: Extracts every subtitle stream to SRT (text copied; PGS via PgsToSrt OCR) and writes `subtitles.exports` for remuxers.
 - `tools/extractPgsSubtitles`: Exports one subtitle per language, preferring text codecs and OCR-ing PGS to SRT with tesseract language selection, writing `subtitles.exports`.
-- `tools/fixEnglishSubtitles`: Cleans common English OCR errors in SRT files listed in `subtitles.exports` with conservative character/word fixes.
+- `tools/fixEnglishSubtitles`: Cleans common English OCR errors in SRT files listed in `subtitles.exports` with conservative (but common) character/word fixes.
 
 ## Typical flow examples
-- DV7 source → `checkDolbyVision7` → `extractHevc` + `extractRpu` → `convertHevcTo81` → `injectRpuIntoHevc` → `extractAudioTracks` + `extractAllSubtitles` → `buildDv81Mp4`.
+- DV7/DV8.x source → `checkDolbyVision7` → `extractHevc` + `extractRpu` → `convertHevcTo81` → `injectRpuIntoHevc` → `extractAudioTracks` + `extractAllSubtitles` → `buildDv81Mp4`.
 - DV5 source → `checkDolbyVision5` → `extractHevc` (copy) + `extractAudioTracks` + `extractAllSubtitles` → `buildDv5Mp4`.
-- DV8.x (not 8.1) → `checkDolbyVision8x` → convert or reject path depending on device support.
+- DV8 source → Same as DV5 source but with `buildDv81Mp4` instead.
 
 ## Acknowledgements
 - Community Dolby Vision knowledge bases and discussions.
