@@ -59,6 +59,23 @@
         return `:name=${raw}`;
     }
 
+    // Build a sensible audio title when none was supplied in the manifest
+    function buildAudioTitle(title, lang, codec) {
+        const cleaned = (title || "").trim();
+        if (cleaned) return cleaned;
+
+        const langPart = (lang || "").trim();
+        const prettyLang = langPart ? langPart.toUpperCase() : "Audio";
+        const labelMap = {
+            eac3: "Dolby Digital Plus",
+            ac3: "Dolby Digital",
+            truehd: "TrueHD",
+            dts: "DTS"
+        };
+        const codecLabel = labelMap[(codec || "").toLowerCase()] || (codec ? codec.toUpperCase() : "");
+        return codecLabel ? `${prettyLang} - ${codecLabel}` : prettyLang;
+    }
+
     function runMP4Box(mp4boxPath, args) {
         const libPathPrefix = "/home/Tdarr/opt/gpac/usr/lib";
         const env = {
@@ -238,7 +255,7 @@
 
             const isConverted = newCodec !== origCodec;
             const convMark = isConverted ? " (Converted)" : "";
-            const name = formatNameFlag(title, convMark);
+            const name = formatNameFlag(buildAudioTitle(title, lang, newCodec), convMark);
 
             mp4Args.push("-add", `${filePath}${langFlag}${name}`);
             log(jobLog, `🎧 Audio: ${filename} | lang=${lang} | converted=${isConverted}`);

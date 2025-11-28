@@ -16,6 +16,8 @@ Prereqs: `curl` or `wget`, and `tar` (standard on most distros).
 1) Run the installer; it downloads the latest plugins from `https://github.com/eebette/Tdarr_DolbyVision_Plugins` (no git required—curl/wget + tar) and copies only the plugin `index.js` files into Tdarr:
    ```bash
    ./install_flow_plugins.sh /path/to/tdarr/server
+   # or one-liner:
+   bash <(curl -fsSL https://raw.githubusercontent.com/eebette/Tdarr_DolbyVision_Plugins/refs/heads/master/install_flow_plugins.sh) /path/to/tdarr/server
    ```
    Example: `/opt/tdarr` ⇒ `/opt/tdarr/Tdarr/Plugins/FlowPlugins`.
 2) Restart Tdarr so the flows appear in the UI.
