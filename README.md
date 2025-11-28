@@ -15,11 +15,18 @@ Prereqs: `curl` or `wget`, and `tar` (standard on most distros).
 
 1) Run the installer; it downloads the latest plugins from `https://github.com/eebette/Tdarr_DolbyVision_Plugins` (no git required—curl/wget + tar) and copies only the plugin `index.js` files into Tdarr:
    ```bash
+   # Download and run
    ./install_flow_plugins.sh /path/to/tdarr/server
+   ```
+   ```bash
    # or one-liner:
    bash <(curl -fsSL https://raw.githubusercontent.com/eebette/Tdarr_DolbyVision_Plugins/refs/heads/master/install_flow_plugins.sh) /path/to/tdarr/server
    ```
-   Example: `/opt/tdarr` ⇒ `/opt/tdarr/Tdarr/Plugins/FlowPlugins`.
+   ```bash
+   # or as root:
+   sudo bash -c 'curl -fsSL https://raw.githubusercontent.com/eebette/Tdarr_DolbyVision_Plugins/refs/heads/master/install_flow_plugins.sh -o /tmp/ install_flow_plugins.sh && bash /tmp/install_flow_plugins.sh /path/to/tdarr/server'
+   ```
+   Example: `/opt/tdarr/server` ⇒ `/opt/tdarr/server/Tdarr/Plugins/FlowPlugins`.
 2) Restart Tdarr so the flows appear in the UI.
 3) Optional: import the example flow from `DolbyVisionFlow.txt` in Tdarr:
    - Tdarr → Flows → Flow + → Import JSON Template + → paste the contents of `DolbyVisionFlow.txt` → click + (bottom-left of the textbox).
