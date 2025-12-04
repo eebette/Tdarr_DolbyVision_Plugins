@@ -124,7 +124,7 @@
                         res.on("data", (chunk) => chunks.push(chunk));
                         res.on("end", () => {
                             const body = Buffer.concat(chunks).toString();
-                            const regex = /href="([^"]*gpac_[^"]+?\\.deb)"|href='([^']*gpac_[^']+?\\.deb)'/gi;
+                            const regex = /href="([^"]*gpac_[^"]+?\.deb)"|href='([^']*gpac_[^']+?\.deb)'/gi;
                             const matches = [];
                             let match;
                             while ((match = regex.exec(body))) {
