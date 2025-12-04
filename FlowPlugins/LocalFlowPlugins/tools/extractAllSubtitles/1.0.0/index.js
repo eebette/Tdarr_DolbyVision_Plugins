@@ -45,6 +45,17 @@
         return "";
     }
 
+    function guessSubtitleExt(codec) {
+        const c = (codec || "").toLowerCase();
+        if (c.includes("pgs") || c.includes("hdmv")) return "sup";
+        if (c === "ass") return "ass";
+        if (c === "ssa") return "ssa";
+        if (c === "webvtt" || c === "vtt") return "vtt";
+        if (c === "subrip" || c === "srt") return "srt";
+        if (c === "mov_text" || c === "text") return "srt";
+        return "sub";
+    }
+
     // MKVINFO parser to get subtitle track numbers (for PGS conversions)
     function getSubtitleTrackNumbers(inputPath) {
         try {
@@ -130,6 +141,14 @@
                 inputType: "string",
                 defaultValue: "",
                 inputUI: { type: "directory" },
+            },
+            {
+                label: "Keep Original Subtitle Streams",
+                name: "keepOriginalSubtitles",
+                tooltip: "If true, keep original subtitle streams (PGS/ASS/etc.) alongside extracted SRTs.",
+                inputType: "boolean",
+                defaultValue: "false",
+                inputUI: { type: "switch" },
             }
         ],
 
@@ -150,6 +169,7 @@
 
         const configuredOutputDir = (resolveInput(args.inputs.outputDirectory, args) || "").toString().trim() || "";
         const workDir = configuredOutputDir.length > 0 ? configuredOutputDir : args.librarySettings.cache;
+        const keepOriginal = String(resolveInput(args.inputs.keepOriginalSubtitles, args)) === "true";
 
         try {
             if (!fs.existsSync(workDir)) {
@@ -207,6 +227,30 @@
             const safeLang = lang || "und";
             const outFile = `${baseName}_s${ffmpegIdx}_${safeLang}.srt`;
             const outPath = path.join(workDir, outFile);
+            const manifestIndex = mkvTrackNumber || ffmpegIdx;
+
+            // Optionally preserve the original subtitle stream as-is
+            if (keepOriginal) {
+                const origExt = guessSubtitleExt(codec);
+                const origFile = `${baseName}_s${ffmpegIdx}_${safeLang}_orig.${origExt}`;
+                const origPath = path.join(workDir, origFile);
+                try {
+                    const copyCmd = [
+                        `ffmpeg -y -i "${inputPath}"`,
+                        `-map 0:${ffmpegIdx}`,
+                        `-c:s copy`,
+                        `"${origPath}"`
+                    ].join(" ");
+                    log(jobLog, `📥 Keeping original subtitle: idx=${ffmpegIdx}, lang=${lang}, codec=${codec}, out=${origFile}`);
+                    execSync(copyCmd, { stdio: "inherit" });
+                    fs.appendFileSync(
+                        exportsFile,
+                        [origFile, manifestIndex, lang, codec, forced, title].join("|") + "\n"
+                    );
+                } catch (err) {
+                    log(jobLog, `⚠ Failed to keep original subtitle idx=${ffmpegIdx}: ${err.message}`);
+                }
+            }
 
             try {
                 if (preferredTextCodecs.includes(codec)) {
@@ -285,7 +329,7 @@
 
             const line = [
                 outFile,
-                ffmpegIdx,
+                manifestIndex,
                 lang,
                 "srt",
                 forced,
