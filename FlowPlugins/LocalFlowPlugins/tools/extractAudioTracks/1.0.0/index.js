@@ -38,18 +38,9 @@
         return new Promise((resolve, reject) => {
             const child = spawn("ffmpeg", cmdArgs, { stdio: "pipe" });
 
-            child.on("error", (err) => {
-                reject(new Error(`Failed to start ffmpeg: ${err.message}`));
-            });
-
-            child.stdout.on("data", (data) => {
-                console.log(`[ffmpeg] ${data.toString().trim()}`);
-            });
-
-            child.stderr.on("data", (data) => {
-                console.log(`[ffmpeg] ${data.toString().trim()}`);
-            });
-
+            child.on("error", (err) => reject(new Error(`Failed to start ffmpeg: ${err.message}`)));
+            child.stdout.on("data", (data) => console.log(`[ffmpeg] ${data.toString().trim()}`));
+            child.stderr.on("data", (data) => console.log(`[ffmpeg] ${data.toString().trim()}`));
             child.on("close", (code) => {
                 if (code === 0) return resolve();
                 reject(new Error(`ffmpeg exited with code ${code}`));
@@ -134,7 +125,7 @@
 
         const convertTruehdDtsToEac3 = String(resolveInput(args.inputs.convertTruehdDtsToEac3, args)) === "true";
 
-        const exportPromises = [];
+        const manifestLines = [];
 
         for (const [id, s] of audioStreams.entries()) {
             const orig_codec_raw = (s.codec_name || "").toLowerCase();
@@ -155,6 +146,21 @@
             let outFile, outCodec, argsList;
 
             const basePrefix = `${fileNameBase}_${id}.${lang}`;
+            const finaliseManifest = (file, codecOut) => {
+                manifestLines.push([
+                    file, id, codecOut, orig_codec, delay, lang, title
+                ].join("|") + "\n");
+            };
+
+            const runExport = async (cmd, file, codecOut, label) => {
+                const outPath = path.join(workDir, file);
+                log(jobLog, `🎧 Export a:${id} ${orig_codec_raw} → ${file}${label ? " (" + label + ")" : ""}`);
+                await runFFmpeg(cmd);
+                if (!fs.existsSync(outPath)) {
+                    throw new Error(`Expected output missing: ${outPath}`);
+                }
+                finaliseManifest(file, codecOut);
+            };
 
             if ((orig_codec === "truehd" || orig_codec === "dts") && convertTruehdDtsToEac3) {
                 outFile = `${basePrefix}.eac3`;
@@ -182,30 +188,48 @@
                     path.join(workDir, outFile)
                 ];
             } else if (orig_codec === "truehd" || orig_codec === "dts") {
-                outFile = `${basePrefix}.${orig_codec}`;
+                outFile = `${basePrefix}.${orig_codec === "truehd" ? "thd" : "dts"}`;
                 outCodec = orig_codec;
                 argsList = [
                     "-y", "-i", inputPath,
                     "-map", `0:a:${id}`, "-c:a:0", "copy",
+                    ...(orig_codec === "truehd" ? ["-f", "truehd"] : []),
                     path.join(workDir, outFile)
                 ];
             }
 
-            log(jobLog, `🎧 Export a:${id} ${orig_codec_raw} → ${outFile}`);
+            if (!outFile || !argsList) continue;
 
-            const line = [
-                outFile, id, outCodec, orig_codec, delay, lang, title
-            ].join("|") + "\n";
-            fs.appendFileSync(exportsPath, line);
-
-            exportPromises.push(
-                runFFmpeg(argsList).catch((err) => {
+            try {
+                await runExport(argsList, outFile, outCodec);
+            } catch (err) {
+                // For TrueHD/DTS conversions, try a raw copy fallback
+                if ((orig_codec === "truehd" || orig_codec === "dts") && convertTruehdDtsToEac3) {
+                    try {
+                        const copyFile = `${basePrefix}.${orig_codec === "truehd" ? "thd" : "dts"}`;
+                        const copyCmd = [
+                            "-y", "-i", inputPath,
+                            "-map", `0:a:${id}`, "-c:a:0", "copy",
+                            ...(orig_codec === "truehd" ? ["-f", "truehd"] : []),
+                            path.join(workDir, copyFile)
+                        ];
+                        log(jobLog, `⚠️ EAC3 convert failed for a:${id} (${err.message}). Falling back to raw copy.`);
+                        await runExport(copyCmd, copyFile, orig_codec, "fallback copy");
+                        continue;
+                    } catch (fallbackErr) {
+                        console.error(`🚨 Failed exporting a:${id} after fallback:`, fallbackErr.message);
+                    }
+                } else {
                     console.error(`🚨 Failed exporting a:${id}:`, err.message);
-                })
-            );
+                }
+            }
         }
 
-        await Promise.all(exportPromises);
+        if (manifestLines.length) {
+            fs.writeFileSync(exportsPath, manifestLines.join(""));
+        } else {
+            log(jobLog, "⚠ No audio tracks exported; exports manifest not written.");
+        }
         log(jobLog, "=== DV7 Audio Export Plugin (Async) END ===");
 
         return {
