@@ -24,7 +24,7 @@ Prereqs: `curl` or `wget`, and `tar` (standard on most distros).
    ```
    ```bash
    # or as root:
-   sudo bash -c 'curl -fsSL https://raw.githubusercontent.com/eebette/Tdarr_DolbyVision_Plugins/refs/heads/master/install_flow_plugins.sh -o /tmp/ install_flow_plugins.sh && bash /tmp/install_flow_plugins.sh /path/to/tdarr/server'
+   sudo bash -c 'curl -fsSL https://raw.githubusercontent.com/eebette/Tdarr_DolbyVision_Plugins/refs/heads/master/install_flow_plugins.sh -o /tmp/install_flow_plugins.sh && bash /tmp/install_flow_plugins.sh /path/to/tdarr/server'
    ```
    Example: `/opt/tdarr/server` ⇒ `/opt/tdarr/server/Tdarr/Plugins/FlowPlugins`.
 2) Restart Tdarr so the flows appear in the UI.
