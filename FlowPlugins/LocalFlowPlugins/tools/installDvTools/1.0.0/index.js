@@ -86,6 +86,38 @@
         });
     }
 
+    // Fetch latest GPAC .deb link from directory listing (alphabetically last)
+    function fetchLatestGpacDebUrl(jobLog) {
+        const listUrl = "https://download.tsi.telecom-paristech.fr/gpac/new_builds/linux64/gpac/";
+
+        return new Promise((resolve, reject) => {
+            log(jobLog, "🔎 Checking for latest GPAC/MP4Box build...");
+            https
+                .get(listUrl, (res) => {
+                    if (res.statusCode !== 200) {
+                        reject(new Error(`Failed to fetch GPAC listing: HTTP ${res.statusCode}`));
+                        return;
+                    }
+
+                    let body = "";
+                    res.on("data", (chunk) => (body += chunk));
+                    res.on("end", () => {
+                        const matches = [...body.matchAll(/href=\"([^\"]*gpac_[^\"]+?\\.deb)\"/gi)].map((m) => m[1]);
+                        if (!matches.length) {
+                            reject(new Error("No GPAC .deb links found in listing"));
+                            return;
+                        }
+                        matches.sort();
+                        const latest = matches[matches.length - 1];
+                        const url = latest.startsWith("http") ? latest : listUrl + latest;
+                        log(jobLog, `🆕 Latest GPAC build detected: ${url}`);
+                        resolve(url);
+                    });
+                })
+                .on("error", reject);
+        });
+    }
+
     // -------------------------
     // Install MP4Box via .deb extraction (NO copying)
     // -------------------------
@@ -103,8 +135,7 @@
 
         ensureDir(gpacDir, jobLog);
 
-        const debUrl =
-            "https://download.tsi.telecom-paristech.fr/gpac/new_builds/linux64/gpac/gpac_2.5-DEV-rev2025-g84aeec6f-master_amd64.deb";
+        const debUrl = await fetchLatestGpacDebUrl(jobLog);
 
         const debFile = path.join(gpacDir, "gpac.deb");
 
