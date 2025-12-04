@@ -126,6 +126,8 @@
         const convertTruehdDtsToEac3 = String(resolveInput(args.inputs.convertTruehdDtsToEac3, args)) === "true";
 
         const manifestLines = [];
+        // Force ffmpeg to regenerate timestamps so TrueHD copies don't spam non‑monotonic DTS errors
+        const timingArgs = ["-fflags", "+genpts", "-avoid_negative_ts", "make_zero"];
 
         for (const [id, s] of audioStreams.entries()) {
             const orig_codec_raw = (s.codec_name || "").toLowerCase();
@@ -166,7 +168,7 @@
                 outFile = `${basePrefix}.eac3`;
                 outCodec = "eac3";
                 argsList = [
-                    "-y", "-i", inputPath,
+                    "-y", ...timingArgs, "-i", inputPath,
                     "-map", `0:a:${id}`, "-b:a:0", "1024k",
                     "-c:a:0", "eac3", "-f", "eac3",
                     path.join(workDir, outFile)
@@ -175,7 +177,7 @@
                 outFile = `${basePrefix}.eac3`;
                 outCodec = "eac3";
                 argsList = [
-                    "-y", "-i", inputPath,
+                    "-y", ...timingArgs, "-i", inputPath,
                     "-map", `0:a:${id}`, "-c:a:0", "copy",
                     path.join(workDir, outFile)
                 ];
@@ -183,7 +185,7 @@
                 outFile = `${basePrefix}.ac3`;
                 outCodec = "ac3";
                 argsList = [
-                    "-y", "-i", inputPath,
+                    "-y", ...timingArgs, "-i", inputPath,
                     "-map", `0:a:${id}`, "-c:a:0", "copy",
                     path.join(workDir, outFile)
                 ];
@@ -191,7 +193,7 @@
                 outFile = `${basePrefix}.${orig_codec === "truehd" ? "thd" : "dts"}`;
                 outCodec = orig_codec;
                 argsList = [
-                    "-y", "-i", inputPath,
+                    "-y", ...timingArgs, "-i", inputPath,
                     "-map", `0:a:${id}`, "-c:a:0", "copy",
                     ...(orig_codec === "truehd" ? ["-f", "truehd"] : []),
                     path.join(workDir, outFile)
@@ -208,7 +210,7 @@
                     try {
                         const copyFile = `${basePrefix}.${orig_codec === "truehd" ? "thd" : "dts"}`;
                         const copyCmd = [
-                            "-y", "-i", inputPath,
+                            "-y", ...timingArgs, "-i", inputPath,
                             "-map", `0:a:${id}`, "-c:a:0", "copy",
                             ...(orig_codec === "truehd" ? ["-f", "truehd"] : []),
                             path.join(workDir, copyFile)
