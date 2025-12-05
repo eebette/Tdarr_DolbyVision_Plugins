@@ -126,16 +126,16 @@
         const convertTruehdDtsToEac3 = String(resolveInput(args.inputs.convertTruehdDtsToEac3, args)) === "true";
 
         const manifestLines = [];
-        // Force ffmpeg to regenerate + clamp timestamps to zero to avoid non‑monotonic DTS spam
-        const timingArgs = [
+        // Input-side timing fixes (place before -i)
+        const timingInputArgs = [
             "-fflags", "+genpts",
             "-avoid_negative_ts", "make_zero",
-            "-reset_timestamps", "1",
-            "-muxpreload", "0",
-            "-muxdelay", "0"
+            "-reset_timestamps", "1"
         ];
+        // Output-side mux timing fixes (place before output file)
+        const timingOutputArgs = ["-muxpreload", "0", "-muxdelay", "0"];
         // Extra hardening for TrueHD raw copies which are the most sensitive
-        const truehdTimingArgs = [...timingArgs, "-max_interleave_delta", "0"];
+        const truehdTimingOutputArgs = [...timingOutputArgs, "-max_interleave_delta", "0"];
 
         for (const [id, s] of audioStreams.entries()) {
             const orig_codec_raw = (s.codec_name || "").toLowerCase();
@@ -176,36 +176,41 @@
                 outFile = `${basePrefix}.eac3`;
                 outCodec = "eac3";
                 argsList = [
-                    "-y", ...timingArgs, "-i", inputPath,
+                    "-y", ...timingInputArgs, "-i", inputPath,
                     "-map", `0:a:${id}`,
                     "-filter:a:0", "aresample=async=1:first_pts=0",
                     "-b:a:0", "1024k",
                     "-c:a:0", "eac3", "-f", "eac3",
+                    ...timingOutputArgs,
                     path.join(workDir, outFile)
                 ];
             } else if (orig_codec === "eac3") {
                 outFile = `${basePrefix}.eac3`;
                 outCodec = "eac3";
                 argsList = [
-                    "-y", ...timingArgs, "-i", inputPath,
+                    "-y", ...timingInputArgs, "-i", inputPath,
                     "-map", `0:a:${id}`, "-c:a:0", "copy",
+                    ...timingOutputArgs,
                     path.join(workDir, outFile)
                 ];
             } else if (orig_codec === "ac3") {
                 outFile = `${basePrefix}.ac3`;
                 outCodec = "ac3";
                 argsList = [
-                    "-y", ...timingArgs, "-i", inputPath,
+                    "-y", ...timingInputArgs, "-i", inputPath,
                     "-map", `0:a:${id}`, "-c:a:0", "copy",
+                    ...timingOutputArgs,
                     path.join(workDir, outFile)
                 ];
             } else if (orig_codec === "truehd" || orig_codec === "dts") {
                 outFile = `${basePrefix}.${orig_codec === "truehd" ? "thd" : "dts"}`;
                 outCodec = orig_codec;
                 argsList = [
-                    "-y", ...(orig_codec === "truehd" ? truehdTimingArgs : timingArgs), "-i", inputPath,
+                    "-y", ...timingInputArgs, "-i", inputPath,
                     "-map", `0:a:${id}`, "-c:a:0", "copy",
-                    ...(orig_codec === "truehd" ? ["-f", "truehd"] : []),
+                    ...(orig_codec === "truehd"
+                        ? ["-f", "truehd", ...truehdTimingOutputArgs]
+                        : timingOutputArgs),
                     path.join(workDir, outFile)
                 ];
             }
@@ -220,9 +225,11 @@
                     try {
                         const copyFile = `${basePrefix}.${orig_codec === "truehd" ? "thd" : "dts"}`;
                         const copyCmd = [
-                            "-y", ...(orig_codec === "truehd" ? truehdTimingArgs : timingArgs), "-i", inputPath,
+                            "-y", ...timingInputArgs, "-i", inputPath,
                             "-map", `0:a:${id}`, "-c:a:0", "copy",
-                            ...(orig_codec === "truehd" ? ["-f", "truehd"] : []),
+                            ...(orig_codec === "truehd"
+                                ? ["-f", "truehd", ...truehdTimingOutputArgs]
+                                : timingOutputArgs),
                             path.join(workDir, copyFile)
                         ];
                         log(jobLog, `⚠️ EAC3 convert failed for a:${id} (${err.message}). Falling back to raw copy.`);
