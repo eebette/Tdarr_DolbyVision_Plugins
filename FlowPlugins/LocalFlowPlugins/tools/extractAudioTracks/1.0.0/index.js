@@ -128,13 +128,13 @@
         const manifestLines = [];
         // Input-side timing fixes (place before -i)
         const timingInputArgs = [
-            "-fflags", "+genpts",
+            "-fflags", "+genpts+igndts",
             "-avoid_negative_ts", "make_zero"
         ];
         // Output-side mux timing fixes (place before output file)
         const timingOutputArgs = ["-muxpreload", "0", "-muxdelay", "0"];
         // Extra hardening for TrueHD raw copies which are the most sensitive
-        const truehdTimingOutputArgs = [...timingOutputArgs, "-max_interleave_delta", "0"];
+        const truehdTimingOutputArgs = [...timingOutputArgs, "-max_interleave_delta", "500000"];
 
         for (const [id, s] of audioStreams.entries()) {
             const orig_codec_raw = (s.codec_name || "").toLowerCase();
