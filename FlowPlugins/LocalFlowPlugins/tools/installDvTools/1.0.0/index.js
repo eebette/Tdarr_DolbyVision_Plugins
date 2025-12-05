@@ -188,6 +188,43 @@
     }
 
     // -------------------------
+    // Install mkvtoolnix via .deb extraction (NO copying)
+    // -------------------------
+    async function installMkvtoolnix(jobLog, OPT) {
+        const mkvDir = path.join(OPT, "mkvtoolnix");
+
+        // FINAL desired mkvextract path — do NOT copy out of mkvDir
+        const mkvextractBin = path.join(mkvDir, "usr/bin/mkvextract");
+
+        if (fs.existsSync(mkvextractBin)) {
+            log(jobLog, `➡️ mkvtoolnix already installed`);
+            return {mkvextractBin};
+        }
+
+        ensureDir(mkvDir, jobLog);
+
+        const debUrl = "https://mkvtoolnix.download/ubuntu/pool/noble/main/m/mkvtoolnix/mkvtoolnix_96.0-0~ubuntu2404bunkus01_amd64.deb";
+        const debFile = path.join(mkvDir, "mkvtoolnix.deb");
+
+        log(jobLog, "⬇️ Downloading mkvtoolnix .deb...");
+        await downloadFile(debUrl, debFile, jobLog);
+
+        log(jobLog, "📦 Extracting mkvtoolnix .deb...");
+        execSync(`dpkg-deb -x mkvtoolnix.deb .`, {
+            cwd: mkvDir,
+            stdio: "inherit",
+            env: process.env,
+        });
+
+        // Ensure mkvextract is executable
+        fs.chmodSync(mkvextractBin, 0o755);
+
+        log(jobLog, `✔ mkvextract installed at: ${mkvextractBin}`);
+
+        return {mkvextractBin};
+    }
+
+    // -------------------------
     // Install libjpeg dependency for MP4Box (non-root, local to gpac)
     // -------------------------
     async function installLibjpeg(jobLog, OPT) {
@@ -242,7 +279,7 @@
     const details = () => ({
         name: "Install DV Tools",
         description:
-            "Installs DV processing dependencies (MP4Box, dovi_tool, dotnet, PgsToSrt, tessdata). Idempotent.",
+            "Installs DV processing dependencies (MP4Box, mkvtoolnix, dovi_tool, dotnet, PgsToSrt, tessdata). Idempotent.",
         style: {borderColor: "purple"},
         tags: "utility",
         isStartPlugin: true,
@@ -284,6 +321,12 @@
         const {mp4boxBin, libDir: mp4boxLibDir} =
             await installMP4BoxFromDeb(jobLog, OPT);
         await installLibjpeg(jobLog, OPT);
+
+        // ---------------------------------------
+        // Install mkvtoolnix
+        // ---------------------------------------
+        const {mkvextractBin} =
+            await installMkvtoolnix(jobLog, OPT);
 
         // ---------------------------------------
         // dovi_tool
@@ -374,6 +417,7 @@
                 // === OUTPUT BINARY PATHS ===
                 mp4boxBin,
                 mp4boxLibDir,
+                mkvextractBin,
                 doviToolBin,
                 dotnetBin,
                 pgsToSrtDll,

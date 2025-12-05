@@ -54,6 +54,20 @@
         });
     }
 
+    function runMkvextract(mkvextractPath, cmdArgs) {
+        return new Promise((resolve, reject) => {
+            const child = spawn(mkvextractPath, cmdArgs, { stdio: "pipe" });
+
+            child.on("error", (err) => reject(new Error(`Failed to start mkvextract: ${err.message}`)));
+            child.stdout.on("data", (data) => console.log(`[mkvextract] ${data.toString().trim()}`));
+            child.stderr.on("data", (data) => console.log(`[mkvextract] ${data.toString().trim()}`));
+            child.on("close", (code) => {
+                if (code === 0) return resolve();
+                reject(new Error(`mkvextract exited with code ${code}`));
+            });
+        });
+    }
+
     const details = () => ({
         name: "Extract Audio Tracks",
         description: "Export DV7 audio tracks to files (with optional EAC3 conversion).",
@@ -78,9 +92,17 @@
                 label: "Convert TrueHD/DTS to EAC3",
                 name: "convertTruehdDtsToEac3",
                 tooltip: "Enable to transcode TrueHD/DTS audio tracks to EAC3 (default: enabled).",
-                inputType: "boolean", // binary toggle
+                inputType: "boolean",
                 defaultValue: "true",
                 inputUI: { type: "switch" },
+            },
+            {
+                label: "mkvextract Path",
+                name: "mkvextractPath",
+                tooltip: "Path to mkvextract binary (used for extracting TrueHD from MKV). Leave empty to use path from Install DV Tools.",
+                inputType: "string",
+                defaultValue: "{{{args.variables.mkvextractBin}}}",
+                inputUI: { type: "text" },
             }
         ],
 
@@ -131,6 +153,20 @@
 
         const convertTruehdDtsToEac3 = String(resolveInput(args.inputs.convertTruehdDtsToEac3, args)) === "true";
 
+        // mkvextract setup for TrueHD extraction from MKV
+        const configuredMkvextractPath = (resolveInput(args.inputs.mkvextractPath, args) || "").toString().trim();
+        // Try configured path, fall back to system installation
+        const mkvextractPath = configuredMkvextractPath || "/usr/bin/mkvextract";
+        const formatName = (args.inputFileObj.ffProbeData?.format?.format_name || "").toLowerCase();
+        const isMkvContainer = formatName.includes("matroska") || formatName.includes("webm");
+        const mkvextractAvailable = isMkvContainer && fs.existsSync(mkvextractPath);
+
+        if (isMkvContainer && !fs.existsSync(mkvextractPath)) {
+            log(jobLog, `⚠️ Input is MKV but mkvextract not found at: ${mkvextractPath}`);
+            log(jobLog, `   Run "Install DV Tools" plugin first, or install mkvtoolnix system-wide.`);
+            log(jobLog, `   TrueHD extraction will use ffmpeg (may have timestamp warnings)`);
+        }
+
         const manifestLines = [];
         // Input-side timing fixes (place before -i)
         const timingInputArgs = [
@@ -177,6 +213,17 @@
                 finaliseManifest(file, codecOut);
             };
 
+            const runMkvExtract = async (trackId, file, codecOut, label) => {
+                const outPath = path.join(workDir, file);
+                log(jobLog, `🎧 Export a:${id} ${orig_codec_raw} → ${file}${label ? " (mkvextract)" : " (mkvextract)"}`);
+                // mkvextract syntax: mkvextract source-file tracks trackId:output-file
+                await runMkvextract(mkvextractPath, [inputPath, "tracks", `${trackId}:${outPath}`]);
+                if (!fs.existsSync(outPath)) {
+                    throw new Error(`Expected output missing: ${outPath}`);
+                }
+                finaliseManifest(file, codecOut);
+            };
+
             if ((orig_codec === "truehd" || orig_codec === "dts") && convertTruehdDtsToEac3) {
                 outFile = `${basePrefix}.eac3`;
                 outCodec = "eac3";
@@ -210,6 +257,19 @@
             } else if (orig_codec === "truehd" || orig_codec === "dts") {
                 outFile = `${basePrefix}.${orig_codec === "truehd" ? "thd" : "dts"}`;
                 outCodec = orig_codec;
+
+                // Use mkvextract for TrueHD from MKV to avoid timestamp issues
+                if (orig_codec === "truehd" && mkvextractAvailable) {
+                    try {
+                        await runMkvExtract(s.index, outFile, outCodec);
+                        continue; // Successfully extracted with mkvextract, move to next stream
+                    } catch (mkvErr) {
+                        log(jobLog, `⚠️ mkvextract failed for a:${id}: ${mkvErr.message}. Falling back to ffmpeg.`);
+                        // Fall through to use ffmpeg as fallback
+                    }
+                }
+
+                // Use ffmpeg for DTS or as fallback for TrueHD
                 argsList = [
                     "-y", ...timingInputArgs, "-i", inputPath,
                     "-map", `0:a:${id}`, "-c:a:0", "copy",
@@ -229,6 +289,20 @@
                 if ((orig_codec === "truehd" || orig_codec === "dts") && convertTruehdDtsToEac3) {
                     try {
                         const copyFile = `${basePrefix}.${orig_codec === "truehd" ? "thd" : "dts"}`;
+
+                        log(jobLog, `⚠️ EAC3 convert failed for a:${id} (${err.message}). Falling back to raw copy.`);
+
+                        // Try mkvextract first for TrueHD from MKV
+                        if (orig_codec === "truehd" && mkvextractAvailable) {
+                            try {
+                                await runMkvExtract(s.index, copyFile, orig_codec, "fallback mkvextract");
+                                continue;
+                            } catch (mkvErr) {
+                                log(jobLog, `⚠️ mkvextract fallback also failed: ${mkvErr.message}. Trying ffmpeg.`);
+                            }
+                        }
+
+                        // Use ffmpeg as final fallback
                         const copyCmd = [
                             "-y", ...timingInputArgs, "-i", inputPath,
                             "-map", `0:a:${id}`, "-c:a:0", "copy",
@@ -237,8 +311,7 @@
                                 : timingOutputArgs),
                             path.join(workDir, copyFile)
                         ];
-                        log(jobLog, `⚠️ EAC3 convert failed for a:${id} (${err.message}). Falling back to raw copy.`);
-                        await runExport(copyCmd, copyFile, orig_codec, "fallback copy");
+                        await runExport(copyCmd, copyFile, orig_codec, "fallback ffmpeg copy");
                         continue;
                     } catch (fallbackErr) {
                         console.error(`🚨 Failed exporting a:${id} after fallback:`, fallbackErr.message);
