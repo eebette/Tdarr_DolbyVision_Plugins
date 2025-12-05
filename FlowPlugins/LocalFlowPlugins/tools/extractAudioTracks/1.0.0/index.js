@@ -305,8 +305,18 @@
                     "-y", ...timingInputArgs, "-i", inputPath,
                     "-map", `0:a:${id}`,
                     "-filter:a:0", "aresample=async=1:first_pts=0",
-                    "-b:a:0", "1024k",
-                    "-c:a:0", "eac3", "-f", "eac3",
+                    "-c:a:0", "eac3",
+                    "-b:a:0", "1024k",              // Maximum EAC3 bitrate for best quality
+                    "-dialnorm", "-27",             // Preserve dynamic range (default is -31)
+                    "-room_type", "0",              // Large room (better for Atmos-style content)
+                    "-mixing_level", "0",           // Disable downmix processing
+                    "-ad_conv_type", "0",           // Standard A/D conversion
+                    "-stereo_rematrixing", "true",  // Enable rematrixing for better spatial quality
+                    "-ltrt_cmixlev", "1.0",         // Preserve center mix level
+                    "-ltrt_surmixlev", "1.0",       // Preserve surround mix level
+                    "-loro_cmixlev", "1.0",         // Preserve center mix level
+                    "-loro_surmixlev", "1.0",       // Preserve surround mix level
+                    "-f", "eac3",
                     ...timingOutputArgs,
                     path.join(workDir, outFile)
                 ];
