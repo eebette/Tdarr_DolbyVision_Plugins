@@ -307,15 +307,15 @@
                     "-filter:a:0", "aresample=async=1:first_pts=0",
                     "-c:a:0", "eac3",
                     "-b:a:0", "1024k",              // Maximum EAC3 bitrate for best quality
-                    "-dialnorm", "-27",             // Preserve dynamic range (default is -31)
+                    "-dialnorm", "-27",             // Preserve dynamic range (less compression than default -31)
                     "-room_type", "0",              // Large room (better for Atmos-style content)
-                    "-mixing_level", "0",           // Disable downmix processing
+                    "-mixing_level", "80",          // Minimum mixing level (80dB = least processing)
                     "-ad_conv_type", "0",           // Standard A/D conversion
                     "-stereo_rematrixing", "true",  // Enable rematrixing for better spatial quality
-                    "-ltrt_cmixlev", "1.0",         // Preserve center mix level
-                    "-ltrt_surmixlev", "1.0",       // Preserve surround mix level
-                    "-loro_cmixlev", "1.0",         // Preserve center mix level
-                    "-loro_surmixlev", "1.0",       // Preserve surround mix level
+                    "-ltrt_cmixlev", "0.707",       // Lt/Rt center mix level (-3dB, preserves balance)
+                    "-ltrt_surmixlev", "0.707",     // Lt/Rt surround mix level (-3dB, preserves balance)
+                    "-loro_cmixlev", "0.707",       // Lo/Ro center mix level (-3dB, preserves balance)
+                    "-loro_surmixlev", "0.707",     // Lo/Ro surround mix level (-3dB, preserves balance)
                     "-f", "eac3",
                     ...timingOutputArgs,
                     path.join(workDir, outFile)
