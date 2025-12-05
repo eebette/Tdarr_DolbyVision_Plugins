@@ -129,8 +129,7 @@
         // Input-side timing fixes (place before -i)
         const timingInputArgs = [
             "-fflags", "+genpts",
-            "-avoid_negative_ts", "make_zero",
-            "-reset_timestamps", "1"
+            "-avoid_negative_ts", "make_zero"
         ];
         // Output-side mux timing fixes (place before output file)
         const timingOutputArgs = ["-muxpreload", "0", "-muxdelay", "0"];
