@@ -236,9 +236,11 @@
                         continue;
                     } catch (fallbackErr) {
                         console.error(`🚨 Failed exporting a:${id} after fallback:`, fallbackErr.message);
+                        throw fallbackErr;
                     }
                 } else {
                     console.error(`🚨 Failed exporting a:${id}:`, err.message);
+                    throw err;
                 }
             }
         }

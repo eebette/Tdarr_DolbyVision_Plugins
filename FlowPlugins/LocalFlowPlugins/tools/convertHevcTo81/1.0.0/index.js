@@ -132,12 +132,7 @@
         const doviToolPath = (resolveInput(args.inputs.doviToolPath, args) || "").toString().trim();
         if (!doviToolPath) {
             log(jobLog, "🚫 Missing dovi_tool path (input: Dovi Tool Path). Set it, e.g. from Install DV Tools (doviToolBin).");
-            return {
-                outputFileObj: inputFileObj,
-                outputNumber: 1,
-                variables: args.variables,
-                error: "Missing dovi_tool path",
-            };
+            throw new Error("Missing dovi_tool path");
         }
 
         const userBlHevcPath = (resolveInput(args.inputs.blHevcPath, args) || "").toString().trim();
@@ -193,12 +188,7 @@
             log(jobLog, "✔ HEVC→DV8.1 Conversion Done (output replaced original path)");
         } catch (e) {
             console.error("🚨 HEVC conversion failed:", e.message);
-            return {
-                outputFileObj: inputFileObj,
-                outputNumber: 1,
-                variables: args.variables,
-                error: e.message
-            };
+            throw e;
         }
 
         return {

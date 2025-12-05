@@ -241,7 +241,7 @@
             await runMP4Box(mp4boxPath, mp4Args);
         } catch (err) {
             console.error("🚨 MP4Box DV5 remux FAILED:", err.message);
-            return {outputFileObj: inputFileObj, outputNumber: 1, variables: args.variables, error: err.message};
+            throw err;
         }
 
         log(jobLog, `🎉 SUCCESS — MP4 Created: ${outputFile}`);

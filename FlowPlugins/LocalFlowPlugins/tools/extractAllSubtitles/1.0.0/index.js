@@ -249,6 +249,7 @@
                     );
                 } catch (err) {
                     log(jobLog, `⚠ Failed to keep original subtitle idx=${ffmpegIdx}: ${err.message}`);
+                    throw err;
                 }
             }
 
@@ -311,7 +312,7 @@
                     if (!ocrSuccess) {
                         const errMsg = lastErr?.message || "no output produced";
                         log(jobLog, `🚫 Failed OCR for subtitle idx=${ffmpegIdx}: ${errMsg}`);
-                        continue;
+                        throw new Error(errMsg);
                     }
                 } else {
                     log(jobLog, `⚠ Unsupported subtitle codec ${codec} at idx=${ffmpegIdx} → skipping`);
@@ -319,12 +320,12 @@
                 }
             } catch (err) {
                 log(jobLog, `🚨 Failed processing subtitle idx=${ffmpegIdx}: ${err.message}`);
-                continue;
+                throw err;
             }
 
             if (!fs.existsSync(outPath)) {
                 log(jobLog, `🚫 Expected output missing, not adding to manifest: ${outPath}`);
-                continue;
+                throw new Error(`Expected output missing: ${outPath}`);
             }
 
             const line = [

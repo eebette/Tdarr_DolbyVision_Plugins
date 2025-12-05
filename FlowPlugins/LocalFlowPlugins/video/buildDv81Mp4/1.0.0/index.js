@@ -288,7 +288,7 @@
             await runMP4Box(mp4boxPath, mp4Args);
         } catch (err) {
             console.error("🚨 MP4Box remux FAILED:", err.message);
-            return {outputFileObj: inputFileObj, outputNumber: 1, variables: args.variables};
+            throw err;
         }
 
         log(jobLog, `🎉 SUCCESS — MP4 Created: ${outputFile}`);

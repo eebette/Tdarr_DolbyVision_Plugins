@@ -203,13 +203,13 @@
         const dotnetPath = (resolveInput(args.inputs.dotnetPath, args) || "").toString().trim();
         if (!dotnetPath) {
             log(jobLog, "🚫 Missing dotnet binary path (input: Dotnet Path).");
-            return { outputFileObj: args.inputFileObj, outputNumber: 1, variables: args.variables, error: "Missing dotnetPath" };
+            throw new Error("Missing dotnetPath");
         }
 
         const pgsToSrtPath = (resolveInput(args.inputs.pgsToSrtPath, args) || "").toString().trim();
         if (!pgsToSrtPath) {
             log(jobLog, "🚫 Missing PgsToSrt path (input: PgsToSrt Path).");
-            return { outputFileObj: args.inputFileObj, outputNumber: 1, variables: args.variables, error: "Missing pgsToSrtPath" };
+            throw new Error("Missing pgsToSrtPath");
         }
 
         if (!ffprobe?.streams) {
