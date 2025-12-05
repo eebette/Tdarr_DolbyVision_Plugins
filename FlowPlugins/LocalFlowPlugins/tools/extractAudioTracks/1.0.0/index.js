@@ -40,7 +40,13 @@
 
             child.on("error", (err) => reject(new Error(`Failed to start ffmpeg: ${err.message}`)));
             child.stdout.on("data", (data) => console.log(`[ffmpeg] ${data.toString().trim()}`));
-            child.stderr.on("data", (data) => console.log(`[ffmpeg] ${data.toString().trim()}`));
+            child.stderr.on("data", (data) => {
+                const output = data.toString().trim();
+                // Filter out non-critical TrueHD/DTS timestamp warnings
+                if (!output.includes("non monotonically increasing dts")) {
+                    console.log(`[ffmpeg] ${output}`);
+                }
+            });
             child.on("close", (code) => {
                 if (code === 0) return resolve();
                 reject(new Error(`ffmpeg exited with code ${code}`));
@@ -202,14 +208,14 @@
                     path.join(workDir, outFile)
                 ];
             } else if (orig_codec === "truehd" || orig_codec === "dts") {
-                // Use MKA container for TrueHD/DTS to avoid strict raw muxer timestamp issues
-                outFile = `${basePrefix}.mka`;
+                outFile = `${basePrefix}.${orig_codec === "truehd" ? "thd" : "dts"}`;
                 outCodec = orig_codec;
                 argsList = [
                     "-y", ...timingInputArgs, "-i", inputPath,
                     "-map", `0:a:${id}`, "-c:a:0", "copy",
-                    "-f", "matroska",
-                    ...timingOutputArgs,
+                    ...(orig_codec === "truehd"
+                        ? ["-f", "truehd", ...truehdTimingOutputArgs]
+                        : timingOutputArgs),
                     path.join(workDir, outFile)
                 ];
             }
@@ -222,15 +228,16 @@
                 // For TrueHD/DTS conversions, try a raw copy fallback
                 if ((orig_codec === "truehd" || orig_codec === "dts") && convertTruehdDtsToEac3) {
                     try {
-                        const copyFile = `${basePrefix}.mka`;
+                        const copyFile = `${basePrefix}.${orig_codec === "truehd" ? "thd" : "dts"}`;
                         const copyCmd = [
                             "-y", ...timingInputArgs, "-i", inputPath,
                             "-map", `0:a:${id}`, "-c:a:0", "copy",
-                            "-f", "matroska",
-                            ...timingOutputArgs,
+                            ...(orig_codec === "truehd"
+                                ? ["-f", "truehd", ...truehdTimingOutputArgs]
+                                : timingOutputArgs),
                             path.join(workDir, copyFile)
                         ];
-                        log(jobLog, `⚠️ EAC3 convert failed for a:${id} (${err.message}). Falling back to MKA copy.`);
+                        log(jobLog, `⚠️ EAC3 convert failed for a:${id} (${err.message}). Falling back to raw copy.`);
                         await runExport(copyCmd, copyFile, orig_codec, "fallback copy");
                         continue;
                     } catch (fallbackErr) {
