@@ -202,13 +202,14 @@
                     path.join(workDir, outFile)
                 ];
             } else if (orig_codec === "truehd" || orig_codec === "dts") {
-                outFile = `${basePrefix}.${orig_codec === "truehd" ? "thd" : "dts"}`;
+                // Use MKA container for TrueHD/DTS to avoid strict raw muxer timestamp issues
+                outFile = `${basePrefix}.mka`;
                 outCodec = orig_codec;
                 argsList = [
                     "-y", ...timingInputArgs, "-i", inputPath,
                     "-map", `0:a:${id}`, "-c:a:0", "copy",
-                    "-enc_time_base", "-1",
-                    ...truehdTimingOutputArgs,
+                    "-f", "matroska",
+                    ...timingOutputArgs,
                     path.join(workDir, outFile)
                 ];
             }
@@ -221,16 +222,15 @@
                 // For TrueHD/DTS conversions, try a raw copy fallback
                 if ((orig_codec === "truehd" || orig_codec === "dts") && convertTruehdDtsToEac3) {
                     try {
-                        const copyFile = `${basePrefix}.${orig_codec === "truehd" ? "thd" : "dts"}`;
+                        const copyFile = `${basePrefix}.mka`;
                         const copyCmd = [
                             "-y", ...timingInputArgs, "-i", inputPath,
                             "-map", `0:a:${id}`, "-c:a:0", "copy",
-                            ...(orig_codec === "truehd"
-                                ? ["-f", "truehd", ...truehdTimingOutputArgs]
-                                : timingOutputArgs),
+                            "-f", "matroska",
+                            ...timingOutputArgs,
                             path.join(workDir, copyFile)
                         ];
-                        log(jobLog, `⚠️ EAC3 convert failed for a:${id} (${err.message}). Falling back to raw copy.`);
+                        log(jobLog, `⚠️ EAC3 convert failed for a:${id} (${err.message}). Falling back to MKA copy.`);
                         await runExport(copyCmd, copyFile, orig_codec, "fallback copy");
                         continue;
                     } catch (fallbackErr) {
