@@ -207,9 +207,8 @@
                 argsList = [
                     "-y", ...timingInputArgs, "-i", inputPath,
                     "-map", `0:a:${id}`, "-c:a:0", "copy",
-                    ...(orig_codec === "truehd"
-                        ? ["-f", "truehd", ...truehdTimingOutputArgs]
-                        : timingOutputArgs),
+                    "-enc_time_base", "-1",
+                    ...truehdTimingOutputArgs,
                     path.join(workDir, outFile)
                 ];
             }
