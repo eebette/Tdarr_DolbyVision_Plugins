@@ -68,6 +68,47 @@
         });
     }
 
+    function getMkvTrackInfo(mkvmergePath, inputPath) {
+        return new Promise((resolve, reject) => {
+            const child = spawn(mkvmergePath, ["-J", inputPath], { stdio: "pipe" });
+
+            let stdout = "";
+            let stderr = "";
+
+            child.on("error", (err) => reject(new Error(`Failed to start mkvmerge: ${err.message}`)));
+            child.stdout.on("data", (data) => { stdout += data.toString(); });
+            child.stderr.on("data", (data) => { stderr += data.toString(); });
+            child.on("close", (code) => {
+                if (code === 0) {
+                    try {
+                        const data = JSON.parse(stdout);
+                        resolve(data);
+                    } catch (err) {
+                        reject(new Error(`Failed to parse mkvmerge JSON: ${err.message}`));
+                    }
+                } else {
+                    reject(new Error(`mkvmerge exited with code ${code}: ${stderr}`));
+                }
+            });
+        });
+    }
+
+    // Map ffprobe audio stream index to MKV track ID
+    function mapAudioStreamToMkvTrack(audioStreamIndex, mkvData, audioStreams) {
+        if (!mkvData || !mkvData.tracks) return null;
+
+        // Get all audio tracks from MKV in order
+        const mkvAudioTracks = mkvData.tracks.filter(t => t.type === "audio");
+
+        // audioStreamIndex is the index within audioStreams array (0, 1, 2...)
+        // Map to the corresponding MKV audio track
+        if (audioStreamIndex < mkvAudioTracks.length) {
+            return mkvAudioTracks[audioStreamIndex].id;
+        }
+
+        return null;
+    }
+
     const details = () => ({
         name: "Extract Audio Tracks",
         description: "Export DV7 audio tracks to files (with optional EAC3 conversion).",
@@ -102,6 +143,14 @@
                 tooltip: "Path to mkvextract binary (used for extracting TrueHD from MKV). Leave empty to use path from Install DV Tools.",
                 inputType: "string",
                 defaultValue: "{{{args.variables.mkvextractBin}}}",
+                inputUI: { type: "text" },
+            },
+            {
+                label: "mkvmerge Path",
+                name: "mkvmergePath",
+                tooltip: "Path to mkvmerge binary (used to get MKV track IDs). Leave empty to use path from Install DV Tools or auto-detect.",
+                inputType: "string",
+                defaultValue: "{{{args.variables.mkvmergeBin}}}",
                 inputUI: { type: "text" },
             }
         ],
@@ -153,18 +202,36 @@
 
         const convertTruehdDtsToEac3 = String(resolveInput(args.inputs.convertTruehdDtsToEac3, args)) === "true";
 
-        // mkvextract setup for TrueHD extraction from MKV
+        // mkvextract/mkvmerge setup for TrueHD extraction from MKV
         const configuredMkvextractPath = (resolveInput(args.inputs.mkvextractPath, args) || "").toString().trim();
         // Try configured path, fall back to system installation
         const mkvextractPath = configuredMkvextractPath || "/usr/bin/mkvextract";
+
+        // Auto-detect mkvmerge path from mkvextract path (same directory)
+        const configuredMkvmergePath = (resolveInput(args.inputs.mkvmergePath, args) || "").toString().trim();
+        const mkvmergePath = configuredMkvmergePath || path.join(path.dirname(mkvextractPath), "mkvmerge");
+
         const formatName = (args.inputFileObj.ffProbeData?.format?.format_name || "").toLowerCase();
         const isMkvContainer = formatName.includes("matroska") || formatName.includes("webm");
         const mkvextractAvailable = isMkvContainer && fs.existsSync(mkvextractPath);
+        const mkvmergeAvailable = fs.existsSync(mkvmergePath);
 
         if (isMkvContainer && !fs.existsSync(mkvextractPath)) {
             log(jobLog, `⚠️ Input is MKV but mkvextract not found at: ${mkvextractPath}`);
             log(jobLog, `   Run "Install DV Tools" plugin first, or install mkvtoolnix system-wide.`);
             log(jobLog, `   TrueHD extraction will use ffmpeg (may have timestamp warnings)`);
+        }
+
+        // Get MKV track info if available
+        let mkvTrackData = null;
+        if (mkvextractAvailable && mkvmergeAvailable) {
+            try {
+                mkvTrackData = await getMkvTrackInfo(mkvmergePath, inputPath);
+                log(jobLog, `✔ Retrieved MKV track info (${mkvTrackData.tracks.filter(t => t.type === "audio").length} audio tracks)`);
+            } catch (err) {
+                log(jobLog, `⚠️ Failed to get MKV track info: ${err.message}`);
+                log(jobLog, `   Will fall back to ffmpeg for TrueHD extraction`);
+            }
         }
 
         const manifestLines = [];
@@ -213,11 +280,18 @@
                 finaliseManifest(file, codecOut);
             };
 
-            const runMkvExtract = async (trackId, file, codecOut, label) => {
+            const runMkvExtract = async (audioStreamIndex, file, codecOut, label) => {
                 const outPath = path.join(workDir, file);
-                log(jobLog, `🎧 Export a:${id} ${orig_codec_raw} → ${file}${label ? " (mkvextract)" : " (mkvextract)"}`);
+
+                // Map ffprobe audio stream index to MKV track ID
+                const mkvTrackId = mapAudioStreamToMkvTrack(audioStreamIndex, mkvTrackData, audioStreams);
+                if (mkvTrackId === null) {
+                    throw new Error(`Could not map audio stream ${audioStreamIndex} to MKV track ID`);
+                }
+
+                log(jobLog, `🎧 Export a:${id} ${orig_codec_raw} → ${file} (mkvextract track ${mkvTrackId})`);
                 // mkvextract syntax: mkvextract source-file tracks trackId:output-file
-                await runMkvextract(mkvextractPath, [inputPath, "tracks", `${trackId}:${outPath}`]);
+                await runMkvextract(mkvextractPath, [inputPath, "tracks", `${mkvTrackId}:${outPath}`]);
                 if (!fs.existsSync(outPath)) {
                     throw new Error(`Expected output missing: ${outPath}`);
                 }
@@ -259,9 +333,9 @@
                 outCodec = orig_codec;
 
                 // Use mkvextract for TrueHD from MKV to avoid timestamp issues
-                if (orig_codec === "truehd" && mkvextractAvailable) {
+                if (orig_codec === "truehd" && mkvextractAvailable && mkvTrackData) {
                     try {
-                        await runMkvExtract(s.index, outFile, outCodec);
+                        await runMkvExtract(id, outFile, outCodec);
                         continue; // Successfully extracted with mkvextract, move to next stream
                     } catch (mkvErr) {
                         log(jobLog, `⚠️ mkvextract failed for a:${id}: ${mkvErr.message}. Falling back to ffmpeg.`);
@@ -293,9 +367,9 @@
                         log(jobLog, `⚠️ EAC3 convert failed for a:${id} (${err.message}). Falling back to raw copy.`);
 
                         // Try mkvextract first for TrueHD from MKV
-                        if (orig_codec === "truehd" && mkvextractAvailable) {
+                        if (orig_codec === "truehd" && mkvextractAvailable && mkvTrackData) {
                             try {
-                                await runMkvExtract(s.index, copyFile, orig_codec, "fallback mkvextract");
+                                await runMkvExtract(id, copyFile, orig_codec, "fallback mkvextract");
                                 continue;
                             } catch (mkvErr) {
                                 log(jobLog, `⚠️ mkvextract fallback also failed: ${mkvErr.message}. Trying ffmpeg.`);

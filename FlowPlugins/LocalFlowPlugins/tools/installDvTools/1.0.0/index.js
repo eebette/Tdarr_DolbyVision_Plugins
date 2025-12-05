@@ -193,12 +193,13 @@
     async function installMkvtoolnix(jobLog, OPT) {
         const mkvDir = path.join(OPT, "mkvtoolnix");
 
-        // FINAL desired mkvextract path — do NOT copy out of mkvDir
+        // FINAL desired binary paths — do NOT copy out of mkvDir
         const mkvextractBin = path.join(mkvDir, "usr/bin/mkvextract");
+        const mkvmergeBin = path.join(mkvDir, "usr/bin/mkvmerge");
 
-        if (fs.existsSync(mkvextractBin)) {
+        if (fs.existsSync(mkvextractBin) && fs.existsSync(mkvmergeBin)) {
             log(jobLog, `➡️ mkvtoolnix already installed`);
-            return {mkvextractBin};
+            return {mkvextractBin, mkvmergeBin};
         }
 
         ensureDir(mkvDir, jobLog);
@@ -216,12 +217,14 @@
             env: process.env,
         });
 
-        // Ensure mkvextract is executable
+        // Ensure binaries are executable
         fs.chmodSync(mkvextractBin, 0o755);
+        fs.chmodSync(mkvmergeBin, 0o755);
 
         log(jobLog, `✔ mkvextract installed at: ${mkvextractBin}`);
+        log(jobLog, `✔ mkvmerge installed at: ${mkvmergeBin}`);
 
-        return {mkvextractBin};
+        return {mkvextractBin, mkvmergeBin};
     }
 
     // -------------------------
@@ -325,7 +328,7 @@
         // ---------------------------------------
         // Install mkvtoolnix
         // ---------------------------------------
-        const {mkvextractBin} =
+        const {mkvextractBin, mkvmergeBin} =
             await installMkvtoolnix(jobLog, OPT);
 
         // ---------------------------------------
@@ -418,6 +421,7 @@
                 mp4boxBin,
                 mp4boxLibDir,
                 mkvextractBin,
+                mkvmergeBin,
                 doviToolBin,
                 dotnetBin,
                 pgsToSrtDll,
