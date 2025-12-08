@@ -330,7 +330,10 @@
         return {
             outputFileObj: {_id: outputFile},
             outputNumber: 1,
-            variables: args.variables
+            variables: {
+                ...args.variables,
+                generatedMp4Path: outputFile
+            }
         };
     };
 
