@@ -45,7 +45,7 @@
             const sideDataList = stream.side_data_list || [];
             const dvSide = sideDataList.find(sd => typeof sd?.dv_profile !== "undefined");
 
-            if (dvSide && Number(dvSide.dv_profile) === 8 && Number(dvSide.dv_bl_signal_compatibility_id) === 1) {
+            if (dvSide && Number(dvSide.dv_profile) === 8 && Number(dvSide.dv_bl_signal_compatibility_id) === 6) {
                 isDV81 = true;
                 break;
             }
