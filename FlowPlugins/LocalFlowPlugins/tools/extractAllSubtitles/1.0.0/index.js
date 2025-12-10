@@ -249,7 +249,8 @@
                     );
                 } catch (err) {
                     log(jobLog, `⚠ Failed to keep original subtitle idx=${ffmpegIdx}: ${err.message}`);
-                    throw err;
+                    log(jobLog, `⏭ Skipping to next subtitle...`);
+                    continue;
                 }
             }
 
@@ -320,12 +321,14 @@
                 }
             } catch (err) {
                 log(jobLog, `🚨 Failed processing subtitle idx=${ffmpegIdx}: ${err.message}`);
-                throw err;
+                log(jobLog, `⏭ Skipping to next subtitle...`);
+                continue;
             }
 
             if (!fs.existsSync(outPath)) {
                 log(jobLog, `🚫 Expected output missing, not adding to manifest: ${outPath}`);
-                throw new Error(`Expected output missing: ${outPath}`);
+                log(jobLog, `⏭ Skipping to next subtitle...`);
+                continue;
             }
 
             const line = [

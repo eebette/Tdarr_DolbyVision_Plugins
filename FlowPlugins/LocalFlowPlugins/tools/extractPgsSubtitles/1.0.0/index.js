@@ -305,47 +305,62 @@
                     );
                 } catch (err) {
                     log(jobLog, `⚠ Failed to keep original subtitle idx=${ffmpegIdx}: ${err.message}`);
+                    log(jobLog, `⏭ Skipping to next subtitle...`);
+                    continue;
                 }
             }
 
-            if (preferredCodecs.includes(codec)) {
-                log(jobLog, `✔ Copy text subtitle: lang=${lang}, codec=${codec}, ffmpegIdx=${ffmpegIdx}`);
+            try {
+                if (preferredCodecs.includes(codec)) {
+                    log(jobLog, `✔ Copy text subtitle: lang=${lang}, codec=${codec}, ffmpegIdx=${ffmpegIdx}`);
 
-                const cmd = [
-                    `ffmpeg -y -i "${inputPath}"`,
-                    `-map 0:${ffmpegIdx}`,
-                    `-c:s srt`,
-                    `"${outFile}"`
-                ].join(" ");
+                    const cmd = [
+                        `ffmpeg -y -i "${inputPath}"`,
+                        `-map 0:${ffmpegIdx}`,
+                        `-c:s srt`,
+                        `"${outFile}"`
+                    ].join(" ");
 
-                execSync(cmd, { stdio: "inherit" });
+                    execSync(cmd, { stdio: "inherit" });
 
-            } else {
-                // PGS → SRT via PgsToSrt, using MKV track number if available
-                const trackForPgsToSrt = mkvTrackNumber || (ffmpegIdx + 1); // best effort fallback
-                log(jobLog,
-                    `🔄 OCR PGS → SRT: lang=${lang}, codec=${codec}, mkvTrack=${trackForPgsToSrt}, ffmpegIdx=${ffmpegIdx}`
+                } else {
+                    // PGS → SRT via PgsToSrt, using MKV track number if available
+                    const trackForPgsToSrt = mkvTrackNumber || (ffmpegIdx + 1); // best effort fallback
+                    log(jobLog,
+                        `🔄 OCR PGS → SRT: lang=${lang}, codec=${codec}, mkvTrack=${trackForPgsToSrt}, ffmpegIdx=${ffmpegIdx}`
+                    );
+
+                    const argsList = [
+                        pgsToSrtPath,
+                        `--input=${inputPath}`,
+                        `--output=${outFile}`,
+                        `--track=${trackForPgsToSrt}`,
+                        `--tesseractlanguage=${tLang}`,
+                        "--tesseractversion=5"
+                    ];
+                    log(jobLog, `🔧 PgsToSrt args: ${argsList.join(" ")}`);
+                    execFileSync(dotnetPath, argsList, { stdio: "inherit" });
+                }
+
+                // Append metadata (use MKV track number as the index column, per "option 3")
+                // Only append if output file was successfully created
+                if (!fs.existsSync(outFile)) {
+                    log(jobLog, `🚫 Expected output missing, not adding to manifest: ${outFile}`);
+                    log(jobLog, `⏭ Skipping to next subtitle...`);
+                    continue;
+                }
+
+                fs.appendFileSync(
+                    exportsFile,
+                    `${path.basename(outFile)}|${mkvNumberForManifest}|${lang}|${codec}|${forced}|${title}\n`
                 );
 
-                const argsList = [
-                    pgsToSrtPath,
-                    `--input=${inputPath}`,
-                    `--output=${outFile}`,
-                    `--track=${trackForPgsToSrt}`,
-                    `--tesseractlanguage=${tLang}`,
-                    "--tesseractversion=5"
-                ];
-                log(jobLog, `🔧 PgsToSrt args: ${argsList.join(" ")}`);
-                execFileSync(dotnetPath, argsList, { stdio: "inherit" });
+                langAdded.add(lang);
+            } catch (err) {
+                log(jobLog, `🚨 Failed processing subtitle lang=${lang}, idx=${ffmpegIdx}: ${err.message}`);
+                log(jobLog, `⏭ Skipping to next subtitle...`);
+                continue;
             }
-
-            // Append metadata (use MKV track number as the index column, per "option 3")
-            fs.appendFileSync(
-                exportsFile,
-                `${path.basename(outFile)}|${mkvNumberForManifest}|${lang}|${codec}|${forced}|${title}\n`
-            );
-
-            langAdded.add(lang);
         }
 
         log(jobLog, "=== Subtitle Extractor Plugin End ===");
