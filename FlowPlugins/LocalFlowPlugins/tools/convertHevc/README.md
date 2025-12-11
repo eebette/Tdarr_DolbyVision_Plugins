@@ -9,6 +9,7 @@
     - Mode 3: Convert profile 5 to 8.1
     - Mode 4: Convert to profile 8.4
     - Mode 5: Convert to profile 8.1 preserving mapping (legacy mode 2)
+  - `Discard Enhancement Layer` (boolean, default `false`): Enable `--discard` flag to discard the Enhancement Layer (EL) during conversion. Required when converting Profile 7 (dual-layer) to Profile 8 (single-layer).
   - `BL HEVC Path` (string, optional; defaults to Tdarr cache `<basename>.hevc`).
   - `Output Directory` (string, optional; defaults to Tdarr cache).
 - Produces a converted Dolby Vision HEVC in the chosen directory; skips steps if outputs already exist.

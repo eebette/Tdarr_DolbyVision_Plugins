@@ -101,6 +101,14 @@
                 inputUI: {type: "text"},
             },
             {
+                label: "Discard Enhancement Layer",
+                name: "discardEL",
+                tooltip: "Enable --discard flag to discard the Enhancement Layer (EL) during conversion. Required when converting Profile 7 (dual-layer) to Profile 8 (single-layer) to ensure the EL is removed.",
+                inputType: "boolean",
+                defaultValue: false,
+                inputUI: {type: "switch"},
+            },
+            {
                 label: "BL HEVC Path",
                 name: "blHevcPath",
                 tooltip: "Path to the HEVC stream to convert. Leave empty to use Tdarr cache directory + <basename>.hevc.",
@@ -177,14 +185,22 @@
         }
 
         const conversionMode = (resolveInput(args.inputs.conversionMode, args) || "2").toString().trim();
-        log(jobLog, `🛠 Converting HEVC using dovi_tool mode ${conversionMode}...`);
+        const discardEL = resolveInput(args.inputs.discardEL, args) === true || resolveInput(args.inputs.discardEL, args) === "true";
+
+        log(jobLog, `🛠 Converting HEVC using dovi_tool mode ${conversionMode}${discardEL ? ' (discarding EL)' : ''}...`);
         try {
-            await runSpawn(doviToolPath, [
+            const doviArgs = [
                 "-m", conversionMode,
                 "convert",
-                "-i", blHevcPath,
-                "-o", tempBlHevcOutputPath,
-            ]);
+            ];
+
+            if (discardEL) {
+                doviArgs.push("--discard");
+            }
+
+            doviArgs.push("-i", blHevcPath, "-o", tempBlHevcOutputPath);
+
+            await runSpawn(doviToolPath, doviArgs);
 
             try {
                 fs.renameSync(tempBlHevcOutputPath, blHevcOutputPath);
