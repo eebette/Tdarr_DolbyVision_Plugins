@@ -131,7 +131,7 @@
     exports.details = details;
 
     const plugin = async (args) => {
-        const lib = require("../../../../../methods/Pleaselib")();
+        const lib = require("../../../../../methods/lib")();
         args.inputs = lib.loadDefaultValues(args.inputs, details);
 
         const jobLog = args.jobLog;
