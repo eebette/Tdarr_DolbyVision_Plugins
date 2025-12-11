@@ -200,6 +200,7 @@
 
             doviArgs.push("-i", blHevcPath, "-o", tempBlHevcOutputPath);
 
+            log(jobLog, `📋 Command: ${doviToolPath} ${doviArgs.join(' ')}`);
             await runSpawn(doviToolPath, doviArgs);
 
             try {

@@ -192,11 +192,13 @@
             log(jobLog, "🛠 Running Dolby Vision RPU extraction...");
 
             try {
-                await runSpawn(doviToolPath, [
+                const rpuArgs = [
                     "extract-rpu",
                     "-i", blHevcPath,
                     "-o", rpuPath,
-                ]);
+                ];
+                log(jobLog, `📋 Command: ${doviToolPath} ${rpuArgs.join(' ')}`);
+                await runSpawn(doviToolPath, rpuArgs);
 
                 log(jobLog, "✔ RPU extraction complete");
             } catch (e) {

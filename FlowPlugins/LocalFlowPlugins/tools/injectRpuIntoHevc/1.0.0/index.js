@@ -185,12 +185,14 @@
         } else {
             log(jobLog, "🛠 Injecting RPU into HEVC...");
             try {
-                await runSpawn(doviToolPath, [
+                const injectArgs = [
                     "inject-rpu",
                     "-i", hevcPath,
                     "-r", rpuPath,
                     "-o", outputHevc,
-                ]);
+                ];
+                log(jobLog, `📋 Command: ${doviToolPath} ${injectArgs.join(' ')}`);
+                await runSpawn(doviToolPath, injectArgs);
                 log(jobLog, "✔ RPU injection complete");
             } catch (e) {
                 log(jobLog, `🚨 RPU injection failed: ${e.message}`);

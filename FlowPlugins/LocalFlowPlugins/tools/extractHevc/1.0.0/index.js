@@ -177,11 +177,12 @@
                     blHevcPath,
                 ];
 
+                log(jobLog, `📋 Command: ffmpeg ${copyArgs.join(' ')}`);
                 await runFfmpeg(copyArgs);
             } else {
                 log(jobLog, `🎬 Source video codec '${codecName || "unknown"}' is not HEVC. Re-encoding to HEVC with libx265 (preset=${x265Preset}, crf=${x265Crf})...`);
                 const x265Params = `crf=${x265Crf}:aq-mode=3:aq-strength=1.0:psy-rd=2.0:psy-rdoq=1.0:deblock=-1,-1:hdr10-opt=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:repeat-headers=1`;
-                await runFfmpeg([
+                const encodeArgs = [
                     "-i", inputPath,
                     "-map", "0:v:0",
                     "-an",
@@ -190,7 +191,10 @@
                     "-preset", x265Preset,
                     "-x265-params", x265Params,
                     blHevcPath,
-                ]);
+                ];
+
+                log(jobLog, `📋 Command: ffmpeg ${encodeArgs.join(' ')}`);
+                await runFfmpeg(encodeArgs);
             }
         } else {
             log(jobLog, `✔ Skipping HEVC extract, found: ${blHevcPath}`);

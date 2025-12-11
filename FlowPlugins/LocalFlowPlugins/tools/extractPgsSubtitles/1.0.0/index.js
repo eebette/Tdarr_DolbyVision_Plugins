@@ -298,6 +298,7 @@
                         `"${origPath}"`
                     ].join(" ");
                     log(jobLog, `📥 Keeping original subtitle: lang=${lang}, codec=${codec}, ffmpegIdx=${ffmpegIdx}, out=${origFileName}`);
+                    log(jobLog, `📋 Command: ${copyCmd}`);
                     execSync(copyCmd, { stdio: "inherit" });
                     fs.appendFileSync(
                         exportsFile,
@@ -321,6 +322,7 @@
                         `"${outFile}"`
                     ].join(" ");
 
+                    log(jobLog, `📋 Command: ${cmd}`);
                     execSync(cmd, { stdio: "inherit" });
 
                 } else {
@@ -338,7 +340,7 @@
                         `--tesseractlanguage=${tLang}`,
                         "--tesseractversion=5"
                     ];
-                    log(jobLog, `🔧 PgsToSrt args: ${argsList.join(" ")}`);
+                    log(jobLog, `📋 Command: ${dotnetPath} ${argsList.join(" ")}`);
                     execFileSync(dotnetPath, argsList, { stdio: "inherit" });
                 }
 

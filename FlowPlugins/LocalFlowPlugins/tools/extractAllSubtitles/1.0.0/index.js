@@ -242,6 +242,7 @@
                         `"${origPath}"`
                     ].join(" ");
                     log(jobLog, `📥 Keeping original subtitle: idx=${ffmpegIdx}, lang=${lang}, codec=${codec}, out=${origFile}`);
+                    log(jobLog, `📋 Command: ${copyCmd}`);
                     execSync(copyCmd, { stdio: "inherit" });
                     fs.appendFileSync(
                         exportsFile,
@@ -263,6 +264,7 @@
                         `-c:s srt`,
                         `"${outPath}"`
                     ].join(" ");
+                    log(jobLog, `📋 Command: ${cmd}`);
                     execSync(cmd, { stdio: "inherit" });
                 } else if (codec.includes("pgs") || codec.includes("hdmv")) {
                     log(jobLog, `🖼 OCR PGS subtitle: idx=${ffmpegIdx}, lang=${lang}, mkvTrack=${mkvTrackNumber || "n/a"}`);
@@ -296,7 +298,8 @@
                                 `--tesseractlanguage=${tessLang}`,
                                 "--tesseractversion=5"
                             ];
-                            log(jobLog, `🔄 PgsToSrt ${attempt.label} → ${argsList.join(" ")}`);
+                            log(jobLog, `🔄 PgsToSrt ${attempt.label}`);
+                            log(jobLog, `📋 Command: ${dotnetPath} ${argsList.join(" ")}`);
                             execFileSync(dotnetPath, argsList, { stdio: "inherit" });
 
                             if (fs.existsSync(outPath)) {

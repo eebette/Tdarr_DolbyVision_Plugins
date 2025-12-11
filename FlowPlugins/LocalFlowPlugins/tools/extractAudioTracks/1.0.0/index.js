@@ -34,8 +34,14 @@
         }
     }
 
-    function runFFmpeg(cmdArgs) {
+    function runFFmpeg(cmdArgs, jobLog) {
         return new Promise((resolve, reject) => {
+            const cmdStr = `ffmpeg ${cmdArgs.join(' ')}`;
+            console.log(`📋 Command: ${cmdStr}`);
+            if (jobLog) {
+                jobLog(`📋 Command: ${cmdStr}`);
+            }
+
             const child = spawn("ffmpeg", cmdArgs, { stdio: "pipe" });
 
             child.on("error", (err) => reject(new Error(`Failed to start ffmpeg: ${err.message}`)));
@@ -54,8 +60,14 @@
         });
     }
 
-    function runMkvextract(mkvextractPath, cmdArgs) {
+    function runMkvextract(mkvextractPath, cmdArgs, jobLog) {
         return new Promise((resolve, reject) => {
+            const cmdStr = `${mkvextractPath} ${cmdArgs.join(' ')}`;
+            console.log(`📋 Command: ${cmdStr}`);
+            if (jobLog) {
+                jobLog(`📋 Command: ${cmdStr}`);
+            }
+
             const child = spawn(mkvextractPath, cmdArgs, { stdio: "pipe" });
 
             child.on("error", (err) => reject(new Error(`Failed to start mkvextract: ${err.message}`)));
@@ -273,7 +285,7 @@
             const runExport = async (cmd, file, codecOut, label) => {
                 const outPath = path.join(workDir, file);
                 log(jobLog, `🎧 Export a:${id} ${orig_codec_raw} → ${file}${label ? " (" + label + ")" : ""}`);
-                await runFFmpeg(cmd);
+                await runFFmpeg(cmd, jobLog);
                 if (!fs.existsSync(outPath)) {
                     throw new Error(`Expected output missing: ${outPath}`);
                 }
@@ -291,7 +303,7 @@
 
                 log(jobLog, `🎧 Export a:${id} ${orig_codec_raw} → ${file} (mkvextract track ${mkvTrackId})`);
                 // mkvextract syntax: mkvextract source-file tracks trackId:output-file
-                await runMkvextract(mkvextractPath, [inputPath, "tracks", `${mkvTrackId}:${outPath}`]);
+                await runMkvextract(mkvextractPath, [inputPath, "tracks", `${mkvTrackId}:${outPath}`], jobLog);
                 if (!fs.existsSync(outPath)) {
                     throw new Error(`Expected output missing: ${outPath}`);
                 }
