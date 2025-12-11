@@ -5,7 +5,7 @@
     Object.defineProperty(exports, "__esModule", {value: true});
     exports.plugin = exports.details = void 0;
 
-    // HEVC → DV8.1 Converter (Async spawn version)
+    // HEVC → DV Converter (Async spawn version)
     const fs = require("fs");
     const path = require("path");
     const {spawn} = require("child_process");
@@ -73,8 +73,8 @@
     }
 
     const details = () => ({
-        name: "Convert HEVC to DV8.1",
-        description: "Convert an HEVC bitstream to Dolby Vision Profile 8.1 via dovi_tool.",
+        name: "Convert HEVC with dovi_tool",
+        description: "Convert an HEVC bitstream using dovi_tool conversion modes (supports profiles 8.1, 8.4, MEL, and more).",
         style: {borderColor: "purple"},
         tags: "video",
         isStartPlugin: false,
@@ -91,6 +91,14 @@
                 inputType: "string",
                 defaultValue: "{{{args.variables.doviToolBin}}}",
                 inputUI: {type: "directory"},
+            },
+            {
+                label: "Conversion Mode",
+                name: "conversionMode",
+                tooltip: "dovi_tool conversion mode (-m flag). Mode 0: Parse & rewrite untouched. Mode 1: Convert to MEL compatible. Mode 2: Convert to profile 8.1 (removes luma/chroma mapping for P7 FEL). Mode 3: Convert profile 5 to 8.1. Mode 4: Convert to profile 8.4. Mode 5: Convert to profile 8.1 preserving mapping (legacy mode 2).",
+                inputType: "string",
+                defaultValue: "2",
+                inputUI: {type: "text"},
             },
             {
                 label: "BL HEVC Path",
@@ -115,11 +123,11 @@
     exports.details = details;
 
     const plugin = async (args) => {
-        const lib = require("../../../../../methods/lib")();
+        const lib = require("../../../../../methods/Pleaselib")();
         args.inputs = lib.loadDefaultValues(args.inputs, details);
 
         const jobLog = args.jobLog;
-        log(jobLog, "== Starting Convert HEVC → DV8.1 ==");
+        log(jobLog, "== Starting HEVC → DV Conversion ==");
 
         const inputFileObj = args.inputFileObj;
         const inputPath = inputFileObj.file;
@@ -141,13 +149,13 @@
                 ? userBlHevcPath
                 : (args.variables.blHevcPath || "").toString().trim() || path.join(args.librarySettings.cache, `${baseName}.hevc`);
 
-        const blHevc81Path = blHevcPath; // final output should replace the original path
-        const tempBlHevc81Path = path.join(workDir, `${baseName}_BL81_temp.hevc`);
+        const blHevcOutputPath = blHevcPath; // final output should replace the original path
+        const tempBlHevcOutputPath = path.join(workDir, `${baseName}_BL_DV_temp.hevc`);
 
         log(jobLog, `Working dir (temp): ${workDir}`);
         log(jobLog, `Base filename: ${baseName}`);
         log(jobLog, `HEVC (input/output): ${blHevcPath}`);
-        log(jobLog, `Temp HEVC→DV8.1 Output: ${tempBlHevc81Path}`);
+        log(jobLog, `Temp HEVC→DV Output: ${tempBlHevcOutputPath}`);
 
         try {
             if (!fs.existsSync(workDir)) {
@@ -159,33 +167,34 @@
             console.error(err);
         }
 
-        if (fs.existsSync(tempBlHevc81Path)) {
-            log(jobLog, `🧹 Removing existing temp file: ${tempBlHevc81Path}`);
+        if (fs.existsSync(tempBlHevcOutputPath)) {
+            log(jobLog, `🧹 Removing existing temp file: ${tempBlHevcOutputPath}`);
             try {
-                fs.unlinkSync(tempBlHevc81Path);
+                fs.unlinkSync(tempBlHevcOutputPath);
             } catch (err) {
                 log(jobLog, `⚠️ Unable to remove temp file, continuing: ${err.message}`);
             }
         }
 
-        log(jobLog, "🛠 Converting HEVC to DV Profile 8.1...");
+        const conversionMode = (resolveInput(args.inputs.conversionMode, args) || "2").toString().trim();
+        log(jobLog, `🛠 Converting HEVC using dovi_tool mode ${conversionMode}...`);
         try {
             await runSpawn(doviToolPath, [
-                "-m", "2", // profile 8.1 conversion mode
+                "-m", conversionMode,
                 "convert",
                 "-i", blHevcPath,
-                "-o", tempBlHevc81Path,
+                "-o", tempBlHevcOutputPath,
             ]);
 
             try {
-                fs.renameSync(tempBlHevc81Path, blHevc81Path);
+                fs.renameSync(tempBlHevcOutputPath, blHevcOutputPath);
             } catch (renameErr) {
                 log(jobLog, `⚠️ Rename failed (${renameErr.message}), attempting copy to final path`);
-                fs.copyFileSync(tempBlHevc81Path, blHevc81Path);
-                fs.unlinkSync(tempBlHevc81Path);
+                fs.copyFileSync(tempBlHevcOutputPath, blHevcOutputPath);
+                fs.unlinkSync(tempBlHevcOutputPath);
             }
 
-            log(jobLog, "✔ HEVC→DV8.1 Conversion Done (output replaced original path)");
+            log(jobLog, "✔ HEVC→DV Conversion Done (output replaced original path)");
         } catch (e) {
             console.error("🚨 HEVC conversion failed:", e.message);
             throw e;

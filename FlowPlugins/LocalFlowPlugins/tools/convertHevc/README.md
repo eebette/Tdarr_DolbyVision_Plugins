@@ -1,0 +1,15 @@
+# Convert HEVC with dovi_tool
+- Converts HEVC to Dolby Vision compatible stream via dovi_tool using configurable conversion modes.
+- Inputs:
+  - `Dovi Tool Path` (string, default `{{{args.variables.doviToolBin}}}`).
+  - `Conversion Mode` (string, default `2`): dovi_tool conversion mode (-m flag).
+    - Mode 0: Parse & rewrite untouched
+    - Mode 1: Convert to MEL compatible
+    - Mode 2: Convert to profile 8.1 (removes luma/chroma mapping for P7 FEL)
+    - Mode 3: Convert profile 5 to 8.1
+    - Mode 4: Convert to profile 8.4
+    - Mode 5: Convert to profile 8.1 preserving mapping (legacy mode 2)
+  - `BL HEVC Path` (string, optional; defaults to Tdarr cache `<basename>.hevc`).
+  - `Output Directory` (string, optional; defaults to Tdarr cache).
+- Produces a converted Dolby Vision HEVC in the chosen directory; skips steps if outputs already exist.
+- Dependencies: `dovi_tool`; install dovi_tool via Install DV Tools plugin.
