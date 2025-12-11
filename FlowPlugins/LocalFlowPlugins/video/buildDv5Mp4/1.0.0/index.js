@@ -272,7 +272,7 @@
         }
 
         return {
-            outputFileObj: inputFileObj,
+            outputFileObj: {_id: outputFile},
             outputNumber: 1,
             variables: {
                 ...args.variables,
