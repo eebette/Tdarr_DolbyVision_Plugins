@@ -277,7 +277,7 @@
         log(jobLog, "=== Subtitle Cleanup Plugin (Conservative) Start ===");
 
         const configuredDir = (resolveInput(args.inputs.subtitlesDirectory, args) || "").toString().trim() || "";
-        const workDir = configuredDir.length > 0 ? configuredDir : args.librarySettings.cache;
+        const workDir = configuredDir.length > 0 ? configuredDir : args.workDir;
         const baseName = path.basename(args.inputFileObj.file, path.extname(args.inputFileObj.file));
         const defaultExportsFile = path.join(workDir, `${baseName}_subtitles.exports`);
         const legacyExportsFile = path.join(workDir, "subtitles.exports");

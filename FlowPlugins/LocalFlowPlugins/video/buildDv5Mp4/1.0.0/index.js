@@ -173,24 +173,24 @@
 
         const blHevc =
             (resolveInput(args.inputs.blDv5HevcPath, args)?.toString().trim()) ||
-            path.join(args.librarySettings.cache, `${baseName}.hevc`);
+            path.join(args.workDir, `${baseName}.hevc`);
 
         const audioExportsFile =
             (resolveInput(args.inputs.audioExportsPath, args)?.toString().trim()) ||
-            path.join(args.librarySettings.cache, `${baseName}_audio.exports`);
+            path.join(args.workDir, `${baseName}_audio.exports`);
 
         const subtitleExportsFile =
             (resolveInput(args.inputs.subtitleExportsPath, args)?.toString().trim()) ||
-            path.join(args.librarySettings.cache, `${baseName}_subtitles.exports`);
+            path.join(args.workDir, `${baseName}_subtitles.exports`);
         const subtitleExists = fs.existsSync(subtitleExportsFile);
 
         const mp4boxPath = (resolveInput(args.inputs.mp4boxPath, args) || "").toString().trim();
         const deleteSources = String(resolveInput(args.inputs.deleteSourcesAfterRemux, args)) === "true";
 
         const audioBaseDir = path.dirname(audioExportsFile);
-        const subBaseDir = subtitleExists ? path.dirname(subtitleExportsFile) : args.librarySettings.cache;
+        const subBaseDir = subtitleExists ? path.dirname(subtitleExportsFile) : args.workDir;
 
-        const outputFile = path.join(args.librarySettings.cache, `${baseName}.mp4`);
+        const outputFile = path.join(args.workDir, `${baseName}.mp4`);
 
         // Build MP4Box args list
         const mp4Args = ["-new", outputFile];

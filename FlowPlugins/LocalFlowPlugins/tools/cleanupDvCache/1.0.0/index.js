@@ -97,7 +97,7 @@
         const baseName = path.basename(inputPath, path.extname(inputPath));
 
         const configuredCacheDir = (resolveInput(args.inputs.cacheDirectory, args) || "").toString().trim() || "";
-        const cacheDir = configuredCacheDir.length > 0 ? configuredCacheDir : args.librarySettings.cache;
+        const cacheDir = configuredCacheDir.length > 0 ? configuredCacheDir : args.workDir;
         const deleteOutputMp4 = String(resolveInput(args.inputs.deleteOutputMp4, args)) === "true";
 
         log(jobLog, `📂 Cache directory: ${cacheDir}`);

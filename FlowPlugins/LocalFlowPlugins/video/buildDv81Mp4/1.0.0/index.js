@@ -178,18 +178,18 @@
         const inputFileObj = args.inputFileObj;
         const inputPath = inputFileObj.file;
         const baseName = path.basename(inputPath, path.extname(inputPath));
-        const workDir = args.librarySettings.cache;
+        const workDir = args.workDir;
 
-        const blHevc = (resolveInput(args.inputs.blDv81HevcPath, args)?.toString().trim()) || path.join(args.librarySettings.cache, `${baseName}.hevc`);
-        const audioExportsFile = (resolveInput(args.inputs.audioExportsPath, args)?.toString().trim()) || path.join(args.librarySettings.cache, `${baseName}_audio.exports`);
+        const blHevc = (resolveInput(args.inputs.blDv81HevcPath, args)?.toString().trim()) || path.join(args.workDir, `${baseName}.hevc`);
+        const audioExportsFile = (resolveInput(args.inputs.audioExportsPath, args)?.toString().trim()) || path.join(args.workDir, `${baseName}_audio.exports`);
 
         const userSubtitleExportsInput = (resolveInput(args.inputs.subtitleExportsPath, args) || "").toString().trim() || "";
         const subtitleExportsFile = userSubtitleExportsInput.length > 0
             ? userSubtitleExportsInput
-            : path.join(args.librarySettings.cache, `${baseName}_subtitles.exports`);
+            : path.join(args.workDir, `${baseName}_subtitles.exports`);
 
         const userRpuInput = (resolveInput(args.inputs.rpuPath, args) || "").toString().trim() || "";
-        const defaultRpuPath = path.join(args.librarySettings.cache, `${baseName}_RPU.bin`);
+        const defaultRpuPath = path.join(args.workDir, `${baseName}_RPU.bin`);
         let rpuFilePath = userRpuInput.length > 0 ? userRpuInput : defaultRpuPath;
         const mp4boxPath = (resolveInput(args.inputs.mp4boxPath, args) || "").toString().trim();
 

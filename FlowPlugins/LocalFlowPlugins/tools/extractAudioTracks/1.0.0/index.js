@@ -182,7 +182,7 @@
         const fileNameBase = args.inputFileObj.fileNameWithoutExtension;
 
         const configuredOutputDir = (resolveInput(args.inputs.outputDirectory, args) || "").toString().trim() || "";
-        const workDir = configuredOutputDir.length > 0 ? configuredOutputDir : args.librarySettings.cache;
+        const workDir = configuredOutputDir.length > 0 ? configuredOutputDir : args.workDir;
 
         // Ensure workDir exists when overridden
         try {

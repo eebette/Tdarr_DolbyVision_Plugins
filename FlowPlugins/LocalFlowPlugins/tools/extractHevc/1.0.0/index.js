@@ -130,7 +130,7 @@
         const workDir =
             configuredOutputDir.length > 0
                 ? configuredOutputDir
-                : args.librarySettings.cache;
+                : args.workDir;
 
         log(jobLog, `Working dir: ${workDir}`);
 

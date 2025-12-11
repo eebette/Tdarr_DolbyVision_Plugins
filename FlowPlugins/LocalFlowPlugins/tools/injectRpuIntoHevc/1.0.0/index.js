@@ -133,7 +133,7 @@
         const baseName = path.basename(inputPath, path.extname(inputPath));
 
         const configuredOutputDir = (resolveInput(args.inputs.outputDirectory, args) || "").toString().trim() || "";
-        const workDir = configuredOutputDir.length > 0 ? configuredOutputDir : args.librarySettings.cache;
+        const workDir = configuredOutputDir.length > 0 ? configuredOutputDir : args.workDir;
 
         const doviToolPath = (resolveInput(args.inputs.doviToolPath, args) || "").toString().trim();
         if (!doviToolPath) {
@@ -145,13 +145,13 @@
         const hevcPath =
             userHevcPath.length > 0
                 ? userHevcPath
-                : (args.variables.blHevcPath || "").toString().trim() || path.join(args.librarySettings.cache, `${baseName}.hevc`);
+                : (args.variables.blHevcPath || "").toString().trim() || path.join(args.workDir, `${baseName}.hevc`);
 
         const userRpuPath = (resolveInput(args.inputs.rpuPath, args) || "").toString().trim();
         const rpuPath =
             userRpuPath.length > 0
                 ? userRpuPath
-                : path.join(args.librarySettings.cache, `${baseName}_RPU.bin`);
+                : path.join(args.workDir, `${baseName}_RPU.bin`);
 
         if (!fs.existsSync(hevcPath)) {
             log(jobLog, `🚫 HEVC not found: ${hevcPath}`);

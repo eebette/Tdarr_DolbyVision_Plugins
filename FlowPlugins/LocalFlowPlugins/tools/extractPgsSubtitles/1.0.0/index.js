@@ -187,7 +187,7 @@
         const baseName = path.basename(inputPath, path.extname(inputPath));
 
         const configuredOutputDir = (resolveInput(args.inputs.outputDirectory, args) || "").toString().trim() || "";
-        const workDir = configuredOutputDir.length > 0 ? configuredOutputDir : args.librarySettings.cache;
+        const workDir = configuredOutputDir.length > 0 ? configuredOutputDir : args.workDir;
         const keepOriginal = String(resolveInput(args.inputs.keepOriginalSubtitles, args)) === "true";
 
         try {

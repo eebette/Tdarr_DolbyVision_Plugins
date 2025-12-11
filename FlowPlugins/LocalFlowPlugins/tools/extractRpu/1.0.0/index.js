@@ -152,7 +152,7 @@
         const blHevcPath =
             userBlHevcPath.length > 0
                 ? userBlHevcPath
-                : (args.variables.blHevcPath || "").toString().trim() || path.join(args.librarySettings.cache, `${baseName}.hevc`);
+                : (args.variables.blHevcPath || "").toString().trim() || path.join(args.workDir, `${baseName}.hevc`);
 
         const configuredOutputDir = (resolveInput(args.inputs.outputDirectory, args) || "").toString().trim() || "";
 
@@ -162,7 +162,7 @@
         const outputDir =
             configuredOutputDir.length > 0
                 ? configuredOutputDir
-                : args.librarySettings.cache;
+                : args.workDir;
 
         log(jobLog, `Base filename: ${baseName}`);
         log(jobLog, `Working directory for RPU: ${outputDir}`);

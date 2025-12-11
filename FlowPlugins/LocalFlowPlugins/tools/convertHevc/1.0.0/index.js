@@ -141,7 +141,7 @@
         const inputPath = inputFileObj.file;
 
         const configuredOutputDir = (resolveInput(args.inputs.outputDirectory, args) || "").toString().trim() || "";
-        const workDir = configuredOutputDir.length > 0 ? configuredOutputDir : args.librarySettings.cache;
+        const workDir = configuredOutputDir.length > 0 ? configuredOutputDir : args.workDir;
 
         const baseName = path.basename(inputPath, path.extname(inputPath));
 
@@ -155,7 +155,7 @@
         const blHevcPath =
             userBlHevcPath.length > 0
                 ? userBlHevcPath
-                : (args.variables.blHevcPath || "").toString().trim() || path.join(args.librarySettings.cache, `${baseName}.hevc`);
+                : (args.variables.blHevcPath || "").toString().trim() || path.join(args.workDir, `${baseName}.hevc`);
 
         const blHevcOutputPath = blHevcPath; // final output should replace the original path
         const tempBlHevcOutputPath = path.join(workDir, `${baseName}_BL_DV_temp.hevc`);
