@@ -158,8 +158,6 @@
             const videoStream = Array.isArray(streams) ? streams.find(s => s.codec_type === "video") : null;
             const codecName = (videoStream?.codec_name || "").toLowerCase();
             const codecTag = (videoStream?.codec_tag_string || "").toLowerCase();
-            const formatName = (args?.inputFileObj?.ffProbeData?.format?.format_name || "").toLowerCase();
-            const isMp4Container = formatName.includes("mp4");
 
             const isHevc =
                 codecName.includes("hevc") ||
@@ -175,11 +173,9 @@
                 const copyArgs = [
                     "-i", inputPath,
                     "-c:v", "copy",
+                    "-bsf:v", "hevc_mp4toannexb",
+                    blHevcPath,
                 ];
-                if (isMp4Container) {
-                    copyArgs.push("-bsf:v", "hevc_mp4toannexb");
-                }
-                copyArgs.push(blHevcPath);
 
                 await runFfmpeg(copyArgs);
             } else {
