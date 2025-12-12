@@ -160,15 +160,15 @@
         const baseName = path.basename(inputPath, path.extname(inputPath));
 
         const audioExportsFile = (resolveInput(args.inputs.audioExportsPath, args)?.toString().trim()) ||
-            path.join(args.librarySettings.cache, `${baseName}_audio.exports`);
+            path.join(args.workDir, `${baseName}_audio.exports`);
 
         const userSubtitleExportsInput = (resolveInput(args.inputs.subtitleExportsPath, args) || "").toString().trim() || "";
         const subtitleExportsFile = userSubtitleExportsInput.length > 0
             ? userSubtitleExportsInput
-            : path.join(args.librarySettings.cache, `${baseName}_subtitles.exports`);
+            : path.join(args.workDir, `${baseName}_subtitles.exports`);
 
         const configuredOutputDir = (resolveInput(args.inputs.outputDirectory, args) || "").toString().trim() || "";
-        const outputDir = configuredOutputDir.length > 0 ? configuredOutputDir : args.librarySettings.cache;
+        const outputDir = configuredOutputDir.length > 0 ? configuredOutputDir : args.workDir;
 
         if (!fs.existsSync(audioExportsFile)) {
             log(jobLog, `🚫 Audio exports not found: ${audioExportsFile}`);
@@ -187,7 +187,7 @@
         const deleteSources = String(resolveInput(args.inputs.deleteSourcesAfterRemux, args)) === "true";
 
         const audioBaseDir = path.dirname(audioExportsFile);
-        const subBaseDir = subtitleExists ? path.dirname(subtitleExportsFile) : args.librarySettings.cache;
+        const subBaseDir = subtitleExists ? path.dirname(subtitleExportsFile) : args.workDir;
 
         const outputFile = path.join(outputDir, `${baseName}.mp4`);
 
