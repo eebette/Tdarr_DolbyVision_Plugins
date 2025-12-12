@@ -173,7 +173,7 @@
                 const copyArgs = [
                     "-i", inputPath,
                     "-c:v", "copy",
-                    "-bsf:v", "hevc_mp4toannexb,dump_extra",
+                    "-bsf:v", "hevc_mp4toannexb",
                     blHevcPath,
                 ];
 
