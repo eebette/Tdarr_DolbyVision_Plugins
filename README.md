@@ -44,6 +44,7 @@ Prereqs: `curl` or `wget`, and `tar` (standard on most distros).
 - `video/checkDolbyVision81`: Routes files that are Dolby Vision Profile 8.1 (profile=8, bl_signal_compatibility_id=1); everything else goes to the alternate path.
 - `video/checkDolbyVision8x`: Routes files that are Dolby Vision Profile 8.x but not 8.1 (e.g., 8.2/8.4) so you can convert or reject as needed.
 - `video/buildDv81Mp4`: Final remux step that reads `audio.exports` and `subtitles.exports` manifest files created by `Extract Audio Tracks` and `Extract All/PGS Subtitles`, respectively, then uses MP4Box to produce a Dolby Vision 8.1 MP4 with proper language tags and track titles.
+- `video/buildDv81Mp4Ffmpeg`: Alternative remux plugin that uses ffmpeg instead of MP4Box. Copies the video stream bit-for-bit from the input file and adds audio/subtitle tracks from manifests. Useful when you want to preserve the original video stream without conversion.
 - `video/buildDv5Mp4`: Similar to the 8.1 builder but targets Dolby Vision Profile 5 MP4 outputs using MP4Box with profile flags and clean track metadata.
 
 ### Tools
@@ -68,9 +69,9 @@ The `convertHevc` plugin supports the following dovi_tool modes:
 - **Mode 5**: Convert to profile 8.1 preserving mapping (legacy mode 2)
 
 ## Typical flow examples 🔄
-- DV7/DV8.x source → `checkDolbyVision7` → `extractHevc` + `extractRpu` → `convertHevc` (mode 2, with --discard for DV7) → `injectRpuIntoHevc` → `extractAudioTracks` + `extractAllSubtitles` → `buildDv81Mp4`.
-- DV5 source → `checkDolbyVision5` → `extractHevc` (copy) + `extractAudioTracks` + `extractAllSubtitles` → `buildDv5Mp4`.
-- DV8 source → Same as DV5 source but with `buildDv81Mp4` instead.
+- **DV7/DV8.x conversion flow**: DV7/DV8.x source → `checkDolbyVision7` → `extractHevc` + `extractRpu` → `convertHevc` (mode 2, with --discard for DV7) → `injectRpuIntoHevc` → `extractAudioTracks` + `extractAllSubtitles` → `buildDv81Mp4`.
+- **DV8.1 source (no video conversion)**: DV8.1 source → `extractAudioTracks` + `extractAllSubtitles` → `buildDv81Mp4Ffmpeg` (copies video stream from source).
+- **DV5 source**: DV5 source → `checkDolbyVision5` → `extractHevc` (copy) + `extractAudioTracks` + `extractAllSubtitles` → `buildDv5Mp4`.
 
 **Note**: All tool plugins now log the exact commands being executed (prefixed with 📋 Command:) for easier debugging and troubleshooting.
 
