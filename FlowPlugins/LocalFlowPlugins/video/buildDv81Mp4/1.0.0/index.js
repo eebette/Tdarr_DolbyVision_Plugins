@@ -245,7 +245,7 @@
         const mp4Args = ["-new", outputFile];
 
         // --- Video Track ---
-        mp4Args.push("-add", `"${blHevc}#video:dvp=8.1:xps_inband"`);
+        mp4Args.push("-add", `${blHevc}#video:dvp=8.1:xps_inband`);
 
         // --- Audio Tracks ---
         audioLines.forEach((line) => {
