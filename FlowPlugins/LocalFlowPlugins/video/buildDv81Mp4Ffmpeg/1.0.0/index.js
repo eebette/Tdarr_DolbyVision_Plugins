@@ -189,7 +189,11 @@
         const audioBaseDir = path.dirname(audioExportsFile);
         const subBaseDir = subtitleExists ? path.dirname(subtitleExportsFile) : args.workDir;
 
+        // Ensure output file has .mp4 extension (baseName has no extension)
         const outputFile = path.join(outputDir, `${baseName}.mp4`);
+
+        log(jobLog, `Input: ${inputPath}`);
+        log(jobLog, `Output: ${outputFile}`);
 
         // Build ffmpeg args list
         const ffmpegArgs = ["-y", "-i", inputPath];
@@ -272,6 +276,9 @@
 
             log(jobLog, `💬 Subtitle ${idx}: ${filename} | lang=${lang} | OCR=${isConverted} | forced=${forced === "1"}`);
         });
+
+        // Force MP4 output format
+        ffmpegArgs.push("-f", "mp4");
 
         // Output file
         ffmpegArgs.push(outputFile);

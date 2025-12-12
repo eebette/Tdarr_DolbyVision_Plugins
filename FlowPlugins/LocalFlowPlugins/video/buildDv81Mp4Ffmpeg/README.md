@@ -13,9 +13,11 @@ This plugin differs from the standard `buildDv81Mp4` plugin in two important way
 
 Use this plugin when:
 - You want to remux without converting the video stream
-- Your source file already contains DV 8.1 compatible video
+- Your source file already contains DV 8.1 compatible video (typically in MKV container)
 - You prefer ffmpeg over MP4Box for the remux operation
-- You've extracted audio/subtitle tracks and want to recombine them with the original video
+- You've extracted audio/subtitle tracks and want to recombine them with the original video into MP4 format
+
+**Typical scenario**: Input video is in MKV container with DV 8.1 video stream, and you want to remux it into MP4 with selected audio/subtitle tracks.
 
 ## Inputs
 
@@ -41,6 +43,7 @@ Use this plugin when:
    - All audio tracks from manifest with proper metadata (`-c:a copy`)
    - All subtitle tracks from manifest with proper metadata (`-c:s mov_text`)
    - Language tags, titles, and disposition flags
+   - `-f mp4` - Forces MP4 container format output
 3. Executes ffmpeg to create MP4
 4. Optionally deletes source files
 5. Returns new MP4 as output
@@ -52,12 +55,14 @@ Use this plugin when:
 ## Example Flow
 
 ```
-Input File (DV 8.1) → Extract Audio Tracks → Extract Subtitles → Build DV8.1 MP4 (FFmpeg)
+Input File (MKV with DV 8.1) → Extract Audio Tracks → Extract Subtitles → Build DV8.1 MP4 (FFmpeg)
 ```
 
 ## Notes
 
-- The video stream is copied bit-for-bit with no conversion
+- The video stream is copied bit-for-bit with no conversion (works with MKV or other containers)
+- Output file always has `.mp4` extension regardless of input file extension
+- MP4 container format is explicitly forced with `-f mp4` flag
 - Video stream arguments ensure proper Dolby Vision compatibility:
   - `hevc_mp4toannexb` bitstream filter ensures proper NAL unit format
   - `hvc1` tag provides MP4 container compatibility
