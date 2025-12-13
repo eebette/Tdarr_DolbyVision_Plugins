@@ -258,7 +258,7 @@
             const [filename, , lang, codec, forced, title] = line.split("|");
 
             if (lang) {
-                ffmpegArgs.push(`-metadata:s:s:${idx}`, `language=${lang}`);
+                ffmpegArgs.push(`-metadata:s:${idx}`, `language=${lang}`);
             }
 
             const isConverted = codec && codec.toLowerCase() === "srt";
@@ -267,10 +267,10 @@
             const forcedMark = forced === "1" ? " (Forced)" : "";
             const trackTitle = `${baseTitle}${forcedMark}${convMark}`;
 
-            ffmpegArgs.push(`-metadata:s:s:${idx}`, `title=${trackTitle}`);
+            ffmpegArgs.push(`-metadata:s:${idx}`, `title=${trackTitle}`);
 
             if (forced === "1") {
-                ffmpegArgs.push(`-disposition:s:s:${idx}`, "forced");
+                ffmpegArgs.push(`-disposition:s:${idx}`, "forced");
             }
 
             log(jobLog, `💬 Subtitle ${idx}: ${filename} | lang=${lang} | OCR=${isConverted} | forced=${forced === "1"}`);
