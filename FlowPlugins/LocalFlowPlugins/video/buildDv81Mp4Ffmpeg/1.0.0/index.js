@@ -231,7 +231,6 @@
 
         // Set codecs
         ffmpegArgs.push("-c:v", "copy");
-        ffmpegArgs.push("-bsf:v", "hevc_mp4toannexb");
         ffmpegArgs.push("-tag:v", "hvc1");
         ffmpegArgs.push("-strict", "unofficial");
         ffmpegArgs.push("-c:a", "copy");
