@@ -270,7 +270,7 @@
             ffmpegArgs.push(`-metadata:s:s:${idx}`, `title=${trackTitle}`);
 
             if (forced === "1") {
-                ffmpegArgs.push(`-disposition:s:s:${idx}`, "forced");
+                ffmpegArgs.push(`-disposition:s:${idx}`, "forced");
             }
 
             log(jobLog, `💬 Subtitle ${idx}: ${filename} | lang=${lang} | OCR=${isConverted} | forced=${forced === "1"}`);
