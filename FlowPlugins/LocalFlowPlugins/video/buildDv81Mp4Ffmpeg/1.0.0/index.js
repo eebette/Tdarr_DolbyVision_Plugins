@@ -196,7 +196,7 @@
         log(jobLog, `Output: ${outputFile}`);
 
         // Build ffmpeg args list
-        const ffmpegArgs = ["-y", "-i", inputPath];
+        const ffmpegArgs = ["-y", "-fflags", "+genpts", "-i", inputPath];
 
         // Add all audio input files
         const audioFilePaths = [];
