@@ -249,16 +249,23 @@
 
         // --- Audio Tracks ---
         audioLines.forEach((line) => {
-            const [filename, , newCodec, origCodec, , lang, title] = line.split("|");
+            const [filename, , newCodec, origCodec, delay, lang, title] = line.split("|");
             const filePath = path.join(audioBaseDir, filename);
             const langFlag = lang ? `:lang=${lang}` : "";
+
+            // Convert delay from seconds to milliseconds for MP4Box
+            const delaySeconds = parseFloat(delay || 0);
+            const delayMs = Math.round(delaySeconds * 1000);
+            const delayFlag = delayMs > 0 ? `:delay=${delayMs}` : "";
 
             const isConverted = newCodec !== origCodec;
             const convMark = isConverted ? " (Converted)" : "";
             const name = formatNameFlag(buildAudioTitle(title, lang, newCodec), convMark);
 
-            mp4Args.push("-add", `${filePath}${langFlag}${name}`);
-            log(jobLog, `🎧 Audio: ${filename} | lang=${lang} | converted=${isConverted}`);
+            mp4Args.push("-add", `${filePath}${langFlag}${delayFlag}${name}`);
+
+            const delayInfo = delayMs > 0 ? ` | delay=${delaySeconds.toFixed(3)}s (${delayMs}ms)` : "";
+            log(jobLog, `🎧 Audio: ${filename} | lang=${lang} | converted=${isConverted}${delayInfo}`);
         });
 
         // --- Subtitle Tracks ---
