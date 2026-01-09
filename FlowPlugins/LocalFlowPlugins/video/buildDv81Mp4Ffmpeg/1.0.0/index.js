@@ -200,10 +200,18 @@
 
         // Add all audio input files
         const audioFilePaths = [];
+        const audioDelays = [];
         audioLines.forEach((line) => {
-            const [filename] = line.split("|");
+            const [filename, , , , delay] = line.split("|");
             const filePath = path.join(audioBaseDir, filename);
+            const delaySeconds = parseFloat(delay || 0);
             audioFilePaths.push(filePath);
+            audioDelays.push(delaySeconds);
+
+            // Apply delay offset if needed
+            if (delaySeconds > 0) {
+                ffmpegArgs.push("-itsoffset", delaySeconds.toString());
+            }
             ffmpegArgs.push("-i", filePath);
         });
 
@@ -238,7 +246,7 @@
 
         // Add metadata for each audio track
         audioLines.forEach((line, idx) => {
-            const [filename, , newCodec, origCodec, , lang, title] = line.split("|");
+            const [filename, , newCodec, origCodec, delay, lang, title] = line.split("|");
 
             if (lang) {
                 ffmpegArgs.push(`-metadata:s:a:${idx}`, `language=${lang}`);
@@ -250,7 +258,9 @@
 
             ffmpegArgs.push(`-metadata:s:a:${idx}`, `title=${trackTitle}`);
 
-            log(jobLog, `🎧 Audio ${idx}: ${filename} | lang=${lang} | converted=${isConverted}`);
+            const delaySeconds = parseFloat(delay || 0);
+            const delayInfo = delaySeconds > 0 ? ` | delay=${delaySeconds.toFixed(3)}s` : "";
+            log(jobLog, `🎧 Audio ${idx}: ${filename} | lang=${lang} | converted=${isConverted}${delayInfo}`);
         });
 
         // Add metadata for each subtitle track

@@ -271,7 +271,7 @@
 
             const lang = (s.tags?.language || "und").toLowerCase();
             const title = (s.tags?.title || "").replace(/\s*\|\s*/g, " / ");
-            const delay = 0;
+            const delay = parseFloat(s.start_time || 0);
 
             let outFile, outCodec, argsList;
 
