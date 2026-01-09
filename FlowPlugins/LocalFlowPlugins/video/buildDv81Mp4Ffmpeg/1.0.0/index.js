@@ -213,6 +213,10 @@
                 ffmpegArgs.push("-itsoffset", delaySeconds.toString());
             }
             ffmpegArgs.push("-i", filePath);
+            // Reset itsoffset after each audio input to prevent affecting subsequent inputs
+            if (delaySeconds > 0) {
+                ffmpegArgs.push("-itsoffset", "0");
+            }
         });
 
         // Add all subtitle input files
