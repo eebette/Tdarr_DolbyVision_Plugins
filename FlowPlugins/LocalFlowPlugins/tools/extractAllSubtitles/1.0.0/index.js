@@ -56,6 +56,24 @@
         return "sub";
     }
 
+    // Fix malformed SRT timestamps from PgsToSrt (e.g., "- 00:00:00,001 -> 00:00:01,000")
+    function sanitizeSrtFile(filePath, jobLog) {
+        try {
+            const content = fs.readFileSync(filePath, "utf8");
+            // Match lines like "- 00:00:00,001 -> 00:00:01,000" and fix them
+            const fixed = content.replace(
+                /^-\s*(\d{2}:\d{2}:\d{2},\d{3})\s*->\s*(\d{2}:\d{2}:\d{2},\d{3})\s*$/gm,
+                "$1 --> $2"
+            );
+            if (fixed !== content) {
+                fs.writeFileSync(filePath, fixed, "utf8");
+                log(jobLog, `🔧 Fixed malformed SRT timestamps in: ${path.basename(filePath)}`);
+            }
+        } catch (err) {
+            log(jobLog, `⚠ Failed to sanitize SRT file: ${err.message}`);
+        }
+    }
+
     // MKVINFO parser to get subtitle track numbers (for PGS conversions)
     function getSubtitleTrackNumbers(inputPath) {
         try {
@@ -303,6 +321,7 @@
                             execFileSync(dotnetPath, argsList, { stdio: "inherit" });
 
                             if (fs.existsSync(outPath)) {
+                                sanitizeSrtFile(outPath, jobLog);
                                 ocrSuccess = true;
                                 break;
                             }
