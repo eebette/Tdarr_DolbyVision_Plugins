@@ -56,13 +56,13 @@
         return "sub";
     }
 
-    // Fix malformed SRT timestamps from PgsToSrt (e.g., "- 00:00:00,001 -> 00:00:01,000")
+    // Fix malformed SRT timestamps from PgsToSrt (e.g., "-00:00:00,001 --> 00:00:01,000")
     function sanitizeSrtFile(filePath, jobLog) {
         try {
             const content = fs.readFileSync(filePath, "utf8");
-            // Match lines like "- 00:00:00,001 -> 00:00:01,000" and fix them
+            // Match timestamp lines with optional leading dash and normalize arrow to -->
             const fixed = content.replace(
-                /^-\s*(\d{2}:\d{2}:\d{2},\d{3})\s*->\s*(\d{2}:\d{2}:\d{2},\d{3})\s*$/gm,
+                /^-?\s*(\d{2}:\d{2}:\d{2},\d{3})\s*-+>\s*(\d{2}:\d{2}:\d{2},\d{3})\s*$/gm,
                 "$1 --> $2"
             );
             if (fixed !== content) {
