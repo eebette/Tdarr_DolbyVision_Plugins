@@ -59,14 +59,24 @@
     // Fix malformed SRT timestamps from PgsToSrt (e.g., "-00:00:00,001 --> 00:00:01,000")
     function sanitizeSrtFile(filePath, jobLog) {
         try {
-            const content = fs.readFileSync(filePath, "utf8");
+            let content = fs.readFileSync(filePath, "utf8");
+            const original = content;
+
             // Match timestamp lines with optional leading dash and normalize arrow to -->
-            const fixed = content.replace(
+            content = content.replace(
                 /^-?\s*(\d{2}:\d{2}:\d{2},\d{3})\s*-+>\s*(\d{2}:\d{2}:\d{2},\d{3})\s*$/gm,
                 "$1 --> $2"
             );
-            if (fixed !== content) {
-                fs.writeFileSync(filePath, fixed, "utf8");
+
+            // Ensure blank line between entries: if a sequence number follows a timestamp
+            // line without a blank line, insert one
+            content = content.replace(
+                /(\d{2}:\d{2}:\d{2},\d{3})\r?\n(\d+\r?\n\d{2}:\d{2}:\d{2})/g,
+                "$1\n\n$2"
+            );
+
+            if (content !== original) {
+                fs.writeFileSync(filePath, content, "utf8");
                 log(jobLog, `🔧 Fixed malformed SRT timestamps in: ${path.basename(filePath)}`);
             }
         } catch (err) {
