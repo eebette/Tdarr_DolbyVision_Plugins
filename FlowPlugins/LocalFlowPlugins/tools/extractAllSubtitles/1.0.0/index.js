@@ -177,6 +177,14 @@
                 inputType: "boolean",
                 defaultValue: "false",
                 inputUI: { type: "switch" },
+            },
+            {
+                label: "Preserve Stream Metadata",
+                name: "preserveMetadata",
+                tooltip: "If true, preserve stream metadata (title, SDH/hearing_impaired, default, forced, etc.) in the manifest and embed in converted subtitles where possible.",
+                inputType: "boolean",
+                defaultValue: "true",
+                inputUI: { type: "switch" },
             }
         ],
 
@@ -198,6 +206,7 @@
         const configuredOutputDir = (resolveInput(args.inputs.outputDirectory, args) || "").toString().trim() || "";
         const workDir = configuredOutputDir.length > 0 ? configuredOutputDir : args.workDir;
         const keepOriginal = String(resolveInput(args.inputs.keepOriginalSubtitles, args)) === "true";
+        const preserveMetadata = String(resolveInput(args.inputs.preserveMetadata, args)) !== "false";
 
         try {
             if (!fs.existsSync(workDir)) {
@@ -249,6 +258,10 @@
             const lang = (s.tags?.language || "und").toLowerCase();
             const title = s.tags?.title || "";
             const forced = s.disposition?.forced ? 1 : 0;
+            const hearingImpaired = s.disposition?.hearing_impaired ? 1 : 0;
+            const visualImpaired = s.disposition?.visual_impaired ? 1 : 0;
+            const isDefault = s.disposition?.default ? 1 : 0;
+            const isComment = s.disposition?.comment ? 1 : 0;
             const ffmpegIdx = s.index;
             const mkvTrackNumber = s.mkvTrack;
 
@@ -272,9 +285,10 @@
                     log(jobLog, `📥 Keeping original subtitle: idx=${ffmpegIdx}, lang=${lang}, codec=${codec}, out=${origFile}`);
                     log(jobLog, `📋 Command: ${copyCmd}`);
                     execSync(copyCmd, { stdio: "inherit" });
+                    // Manifest format: file|index|lang|codec|forced|title|hearing_impaired|visual_impaired|default|comment
                     fs.appendFileSync(
                         exportsFile,
-                        [origFile, manifestIndex, lang, codec, forced, title].join("|") + "\n"
+                        [origFile, manifestIndex, lang, codec, forced, title, hearingImpaired, visualImpaired, isDefault, isComment].join("|") + "\n"
                     );
                 } catch (err) {
                     log(jobLog, `⚠ Failed to keep original subtitle idx=${ffmpegIdx}: ${err.message}`);
@@ -286,10 +300,16 @@
             try {
                 if (preferredTextCodecs.includes(codec)) {
                     log(jobLog, `✔ Converting text subtitle to SRT: idx=${ffmpegIdx}, lang=${lang}, codec=${codec}`);
+                    const metadataFlags = [];
+                    if (preserveMetadata) {
+                        if (title) metadataFlags.push(`-metadata:s:0 title="${title.replace(/"/g, '\\"')}"`);
+                        if (lang && lang !== "und") metadataFlags.push(`-metadata:s:0 language=${lang}`);
+                    }
                     const cmd = [
                         `ffmpeg -y -i "${inputPath}"`,
                         `-map 0:${ffmpegIdx}`,
                         `-c:s srt`,
+                        ...metadataFlags,
                         `"${outPath}"`
                     ].join(" ");
                     log(jobLog, `📋 Command: ${cmd}`);
@@ -363,13 +383,18 @@
                 continue;
             }
 
+            // Manifest format: file|index|lang|codec|forced|title|hearing_impaired|visual_impaired|default|comment
             const line = [
                 outFile,
                 manifestIndex,
                 lang,
                 "srt",
                 forced,
-                title
+                preserveMetadata ? title : "",
+                hearingImpaired,
+                visualImpaired,
+                isDefault,
+                isComment
             ].join("|") + "\n";
             fs.appendFileSync(exportsFile, line);
         }
