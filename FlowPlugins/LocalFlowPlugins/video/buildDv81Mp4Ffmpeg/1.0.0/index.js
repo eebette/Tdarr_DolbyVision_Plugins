@@ -269,7 +269,7 @@
 
         // Add metadata for each subtitle track
         subtitleLines.forEach((line, idx) => {
-            const [filename, , lang, codec, forced, title] = line.split("|");
+            const [filename, , lang, codec, forced, title, hearingImpaired, visualImpaired, isDefault, isComment] = line.split("|");
 
             if (lang) {
                 ffmpegArgs.push(`-metadata:s:s:${idx}`, `language=${lang}`);
@@ -283,11 +283,17 @@
 
             ffmpegArgs.push(`-metadata:s:s:${idx}`, `title=${trackTitle}`);
 
-            if (forced === "1") {
-                ffmpegArgs.push(`-disposition:s:${idx}`, "forced");
+            const dispositions = [];
+            if (forced === "1") dispositions.push("forced");
+            if (hearingImpaired === "1") dispositions.push("hearing_impaired");
+            if (visualImpaired === "1") dispositions.push("visual_impaired");
+            if (isDefault === "1") dispositions.push("default");
+            if (isComment === "1") dispositions.push("comment");
+            if (dispositions.length > 0) {
+                ffmpegArgs.push(`-disposition:s:${idx}`, dispositions.join("+"));
             }
 
-            log(jobLog, `💬 Subtitle ${idx}: ${filename} | lang=${lang} | OCR=${isConverted} | forced=${forced === "1"}`);
+            log(jobLog, `💬 Subtitle ${idx}: ${filename} | lang=${lang} | OCR=${isConverted} | forced=${forced === "1"} | HI=${hearingImpaired === "1"} | VI=${visualImpaired === "1"} | default=${isDefault === "1"} | comment=${isComment === "1"}`);
         });
 
         // Force MP4 output format

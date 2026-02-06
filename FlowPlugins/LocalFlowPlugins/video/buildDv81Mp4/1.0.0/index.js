@@ -270,7 +270,7 @@
 
         // --- Subtitle Tracks ---
         subtitleLines.forEach((line) => {
-            const [filename, , lang, codec, forced, title] = line.split("|");
+            const [filename, , lang, codec, forced, title, hearingImpaired, visualImpaired, isDefault, isComment] = line.split("|");
             const srtPath = path.join(subBaseDir, filename);
             const langFlag = lang ? `:lang=${lang}` : "";
             const forcedFlag = forced === "1" ? ":forced" : "";
@@ -279,10 +279,13 @@
             const convMark = isConverted ? " (OCR)" : "";
             const baseTitle = title || (lang ? lang.toUpperCase() : "Subtitle");
             const forcedMark = forced === "1" ? " (Forced)" : "";
-            const name = formatNameFlag(`${baseTitle}${forcedMark}`, convMark);
+            const hiMark = hearingImpaired === "1" ? " [SDH]" : "";
+            const viMark = visualImpaired === "1" ? " [AD]" : "";
+            const commentMark = isComment === "1" ? " [Commentary]" : "";
+            const name = formatNameFlag(`${baseTitle}${forcedMark}${hiMark}${viMark}${commentMark}`, convMark);
 
             mp4Args.push("-add", `${srtPath}${langFlag}${forcedFlag}${name}`);
-            log(jobLog, `💬 Subtitle: ${filename} | lang=${lang} | OCR=${isConverted}`);
+            log(jobLog, `💬 Subtitle: ${filename} | lang=${lang} | OCR=${isConverted} | forced=${forced === "1"} | HI=${hearingImpaired === "1"} | VI=${visualImpaired === "1"} | default=${isDefault === "1"} | comment=${isComment === "1"}`);
         });
 
         if (rpuFilePath) {
