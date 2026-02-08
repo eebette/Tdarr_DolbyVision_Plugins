@@ -275,9 +275,10 @@
                 ffmpegArgs.push(`-metadata:s:s:${idx}`, `language=${lang}`);
             }
 
-            const isConverted = codec && codec.toLowerCase() === "srt";
+            const codecLower = (codec || "").toLowerCase();
+            const isOcr = codecLower.includes("pgs") || codecLower.includes("hdmv");
             const baseTitle = title || (lang ? lang.toUpperCase() : "Subtitle");
-            const convMark = isConverted && !/\bocr\b/i.test(baseTitle) ? " (OCR)" : "";
+            const convMark = isOcr && !/\bocr\b/i.test(baseTitle) ? " (OCR)" : "";
             const forcedMark = forced === "1" && !/\bforced\b/i.test(baseTitle) ? " (Forced)" : "";
             const trackTitle = `${baseTitle}${forcedMark}${convMark}`;
 
@@ -293,7 +294,7 @@
                 ffmpegArgs.push(`-disposition:s:${idx}`, dispositions.join("+"));
             }
 
-            log(jobLog, `💬 Subtitle ${idx}: ${filename} | lang=${lang} | OCR=${isConverted} | forced=${forced === "1"} | HI=${hearingImpaired === "1"} | VI=${visualImpaired === "1"} | default=${isDefault === "1"} | comment=${isComment === "1"}`);
+            log(jobLog, `💬 Subtitle ${idx}: ${filename} | lang=${lang} | OCR=${isOcr} | forced=${forced === "1"} | HI=${hearingImpaired === "1"} | VI=${visualImpaired === "1"} | default=${isDefault === "1"} | comment=${isComment === "1"}`);
         });
 
         // Force MP4 output format
