@@ -275,8 +275,9 @@
             const langFlag = lang ? `:lang=${lang}` : "";
             const forcedFlag = forced === "1" ? ":forced" : "";
 
-            const isConverted = codec && codec.toLowerCase() === "srt";
-            const convMark = isConverted ? " (OCR)" : "";
+            const codecLower = (codec || "").toLowerCase();
+            const isOcr = codecLower.includes("pgs") || codecLower.includes("hdmv");
+            const convMark = isOcr ? " (OCR)" : "";
             const baseTitle = title || (lang ? lang.toUpperCase() : "Subtitle");
             const forcedMark = forced === "1" ? " (Forced)" : "";
             const hiMark = hearingImpaired === "1" ? " [SDH]" : "";
@@ -285,7 +286,7 @@
             const name = formatNameFlag(`${baseTitle}${forcedMark}${hiMark}${viMark}${commentMark}`, convMark);
 
             mp4Args.push("-add", `${srtPath}${langFlag}${forcedFlag}${name}`);
-            log(jobLog, `💬 Subtitle: ${filename} | lang=${lang} | OCR=${isConverted} | forced=${forced === "1"} | HI=${hearingImpaired === "1"} | VI=${visualImpaired === "1"} | default=${isDefault === "1"} | comment=${isComment === "1"}`);
+            log(jobLog, `💬 Subtitle: ${filename} | lang=${lang} | OCR=${isOcr} | forced=${forced === "1"} | HI=${hearingImpaired === "1"} | VI=${visualImpaired === "1"} | default=${isDefault === "1"} | comment=${isComment === "1"}`);
         });
 
         if (rpuFilePath) {

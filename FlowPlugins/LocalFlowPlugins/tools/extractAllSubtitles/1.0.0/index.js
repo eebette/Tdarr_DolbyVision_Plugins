@@ -388,7 +388,7 @@
                 outFile,
                 manifestIndex,
                 lang,
-                "srt",
+                codec,
                 forced,
                 preserveMetadata ? title : "",
                 hearingImpaired,
