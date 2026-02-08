@@ -277,12 +277,12 @@
 
             const codecLower = (codec || "").toLowerCase();
             const isOcr = codecLower.includes("pgs") || codecLower.includes("hdmv");
-            const convMark = isOcr ? " (OCR)" : "";
             const baseTitle = title || (lang ? lang.toUpperCase() : "Subtitle");
-            const forcedMark = forced === "1" ? " (Forced)" : "";
-            const hiMark = hearingImpaired === "1" ? " [SDH]" : "";
-            const viMark = visualImpaired === "1" ? " [AD]" : "";
-            const commentMark = isComment === "1" ? " [Commentary]" : "";
+            const convMark = isOcr && !/\bocr\b/i.test(baseTitle) ? " (OCR)" : "";
+            const forcedMark = forced === "1" && !/\bforced\b/i.test(baseTitle) ? " (Forced)" : "";
+            const hiMark = hearingImpaired === "1" && !/\bsdh\b/i.test(baseTitle) ? " [SDH]" : "";
+            const viMark = visualImpaired === "1" && !/\bad\b/i.test(baseTitle) ? " [AD]" : "";
+            const commentMark = isComment === "1" && !/\bcommentary\b/i.test(baseTitle) ? " [Commentary]" : "";
             const name = formatNameFlag(`${baseTitle}${forcedMark}${hiMark}${viMark}${commentMark}`, convMark);
 
             mp4Args.push("-add", `${srtPath}${langFlag}${forcedFlag}${name}`);

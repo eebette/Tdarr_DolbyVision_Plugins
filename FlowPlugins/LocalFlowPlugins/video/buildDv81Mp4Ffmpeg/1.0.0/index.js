@@ -276,9 +276,9 @@
             }
 
             const isConverted = codec && codec.toLowerCase() === "srt";
-            const convMark = isConverted ? " (OCR)" : "";
             const baseTitle = title || (lang ? lang.toUpperCase() : "Subtitle");
-            const forcedMark = forced === "1" ? " (Forced)" : "";
+            const convMark = isConverted && !/\bocr\b/i.test(baseTitle) ? " (OCR)" : "";
+            const forcedMark = forced === "1" && !/\bforced\b/i.test(baseTitle) ? " (Forced)" : "";
             const trackTitle = `${baseTitle}${forcedMark}${convMark}`;
 
             ffmpegArgs.push(`-metadata:s:s:${idx}`, `title=${trackTitle}`);
