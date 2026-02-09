@@ -261,6 +261,7 @@
             const trackTitle = buildAudioTitle(title, lang, newCodec) + convMark;
 
             ffmpegArgs.push(`-metadata:s:a:${idx}`, `title=${trackTitle}`);
+            ffmpegArgs.push(`-metadata:s:a:${idx}`, `handler_name=${trackTitle}`);
 
             const delaySeconds = parseFloat(delay || 0);
             const delayInfo = delaySeconds > 0 ? ` | delay=${delaySeconds.toFixed(3)}s` : "";
@@ -283,6 +284,7 @@
             const trackTitle = `${baseTitle}${forcedMark}${convMark}`;
 
             ffmpegArgs.push(`-metadata:s:s:${idx}`, `title=${trackTitle}`);
+            ffmpegArgs.push(`-metadata:s:s:${idx}`, `handler_name=${trackTitle}`);
 
             const dispositions = [];
             if (forced === "1") dispositions.push("forced");
