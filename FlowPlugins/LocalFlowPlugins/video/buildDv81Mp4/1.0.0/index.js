@@ -70,7 +70,8 @@
             eac3: "Dolby Digital Plus",
             ac3: "Dolby Digital",
             truehd: "TrueHD",
-            dts: "DTS"
+            dts: "DTS",
+            flac: "FLAC"
         };
         const codecLabel = labelMap[(codec || "").toLowerCase()] || (codec ? codec.toUpperCase() : "");
         return codecLabel ? `${prettyLang} - ${codecLabel}` : prettyLang;
