@@ -150,6 +150,14 @@
                 inputUI: { type: "switch" },
             },
             {
+                label: "Convert FLAC to ALAC",
+                name: "convertFlacToAlac",
+                tooltip: "Enable to transcode FLAC audio tracks to ALAC (Apple Lossless). Useful for MP4 containers which don't natively support FLAC in all players (default: disabled).",
+                inputType: "boolean",
+                defaultValue: "false",
+                inputUI: { type: "switch" },
+            },
+            {
                 label: "mkvextract Path",
                 name: "mkvextractPath",
                 tooltip: "Path to mkvextract binary (used for extracting TrueHD from MKV). Leave empty to use path from Install DV Tools.",
@@ -213,6 +221,7 @@
         }
 
         const convertTruehdDtsToEac3 = String(resolveInput(args.inputs.convertTruehdDtsToEac3, args)) === "true";
+        const convertFlacToAlac = String(resolveInput(args.inputs.convertFlacToAlac, args)) === "true";
 
         // mkvextract/mkvmerge setup for TrueHD extraction from MKV
         const configuredMkvextractPath = (resolveInput(args.inputs.mkvextractPath, args) || "").toString().trim();
@@ -348,6 +357,15 @@
                 argsList = [
                     "-y", ...timingInputArgs, "-i", inputPath,
                     "-map", `0:a:${id}`, "-c:a:0", "copy",
+                    ...timingOutputArgs,
+                    path.join(workDir, outFile)
+                ];
+            } else if (orig_codec === "flac" && convertFlacToAlac) {
+                outFile = `${basePrefix}.m4a`;
+                outCodec = "alac";
+                argsList = [
+                    "-y", ...timingInputArgs, "-i", inputPath,
+                    "-map", `0:a:${id}`, "-c:a:0", "alac",
                     ...timingOutputArgs,
                     path.join(workDir, outFile)
                 ];
