@@ -185,6 +185,14 @@
                 inputType: "boolean",
                 defaultValue: "true",
                 inputUI: { type: "switch" },
+            },
+            {
+                label: "Prefer Text Subtitle as Default",
+                name: "preferTextDefault",
+                tooltip: "When enabled, if the default subtitle is image-based (PGS), transfer the default flag to the first non-image-based, non-commentary text subtitle of the same language. If no suitable text subtitle exists, the default remains unchanged.",
+                inputType: "boolean",
+                defaultValue: "false",
+                inputUI: { type: "switch" },
             }
         ],
 
@@ -207,6 +215,7 @@
         const workDir = configuredOutputDir.length > 0 ? configuredOutputDir : args.workDir;
         const keepOriginal = String(resolveInput(args.inputs.keepOriginalSubtitles, args)) === "true";
         const preserveMetadata = String(resolveInput(args.inputs.preserveMetadata, args)) !== "false";
+        const preferTextDefault = String(resolveInput(args.inputs.preferTextDefault, args)) === "true";
 
         try {
             if (!fs.existsSync(workDir)) {
@@ -234,6 +243,7 @@
 
         const exportsFile = path.join(workDir, `${baseName}_subtitles.exports`);
         fs.writeFileSync(exportsFile, ""); // clear or create
+        const manifestEntries = [];
 
         const dotnetPath = (resolveInput(args.inputs.dotnetPath, args) || "").toString().trim();
         const pgsToSrtPath = (resolveInput(args.inputs.pgsToSrtPath, args) || "").toString().trim();
@@ -285,11 +295,11 @@
                     log(jobLog, `📥 Keeping original subtitle: idx=${ffmpegIdx}, lang=${lang}, codec=${codec}, out=${origFile}`);
                     log(jobLog, `📋 Command: ${copyCmd}`);
                     execSync(copyCmd, { stdio: "inherit" });
-                    // Manifest format: file|index|lang|codec|forced|title|hearing_impaired|visual_impaired|default|comment
-                    fs.appendFileSync(
-                        exportsFile,
-                        [origFile, manifestIndex, lang, codec, forced, title, hearingImpaired, visualImpaired, isDefault, isComment].join("|") + "\n"
-                    );
+                    manifestEntries.push({
+                        file: origFile, index: manifestIndex, lang, codec, forced,
+                        title, hearingImpaired, visualImpaired, isDefault, isComment,
+                        isImageBased: codec.includes("pgs") || codec.includes("hdmv")
+                    });
                 } catch (err) {
                     log(jobLog, `⚠ Failed to keep original subtitle idx=${ffmpegIdx}: ${err.message}`);
                     log(jobLog, `⏭ Skipping to next subtitle...`);
@@ -383,18 +393,52 @@
                 continue;
             }
 
-            // Manifest format: file|index|lang|codec|forced|title|hearing_impaired|visual_impaired|default|comment
+            manifestEntries.push({
+                file: outFile, index: manifestIndex, lang, codec, forced,
+                title: preserveMetadata ? title : "",
+                hearingImpaired, visualImpaired, isDefault, isComment,
+                isImageBased: codec.includes("pgs") || codec.includes("hdmv")
+            });
+        }
+
+        // Transfer default from image-based subtitles to text subtitles if option is enabled
+        if (preferTextDefault) {
+            const defaultImageIdx = manifestEntries.findIndex(e => e.isDefault && e.isImageBased);
+            if (defaultImageIdx !== -1) {
+                const defaultLang = manifestEntries[defaultImageIdx].lang;
+                // Prefer same language, non-image-based, non-commentary
+                let candidateIdx = manifestEntries.findIndex(e =>
+                    !e.isImageBased && !e.isComment && !e.isDefault && e.lang === defaultLang
+                );
+                // Fall back to any non-image-based, non-commentary
+                if (candidateIdx === -1) {
+                    candidateIdx = manifestEntries.findIndex(e =>
+                        !e.isImageBased && !e.isComment && !e.isDefault
+                    );
+                }
+                if (candidateIdx !== -1) {
+                    // Clear default from all image-based entries
+                    manifestEntries.forEach(e => {
+                        if (e.isDefault && e.isImageBased) {
+                            log(jobLog, `🔄 Removing default from image-based subtitle: ${e.file}`);
+                            e.isDefault = 0;
+                        }
+                    });
+                    log(jobLog, `🔄 Setting default on text subtitle: ${manifestEntries[candidateIdx].file}`);
+                    manifestEntries[candidateIdx].isDefault = 1;
+                } else {
+                    log(jobLog, `ℹ No eligible text subtitle found to transfer default — keeping image-based subtitle as default`);
+                }
+            }
+        }
+
+        // Write manifest entries
+        // Manifest format: file|index|lang|codec|forced|title|hearing_impaired|visual_impaired|default|comment
+        for (const entry of manifestEntries) {
             const line = [
-                outFile,
-                manifestIndex,
-                lang,
-                codec,
-                forced,
-                preserveMetadata ? title : "",
-                hearingImpaired,
-                visualImpaired,
-                isDefault,
-                isComment
+                entry.file, entry.index, entry.lang, entry.codec, entry.forced,
+                entry.title, entry.hearingImpaired, entry.visualImpaired,
+                entry.isDefault, entry.isComment
             ].join("|") + "\n";
             fs.appendFileSync(exportsFile, line);
         }
