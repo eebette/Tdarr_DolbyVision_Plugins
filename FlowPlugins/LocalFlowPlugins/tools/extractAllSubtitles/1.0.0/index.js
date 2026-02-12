@@ -429,6 +429,21 @@
                 } else {
                     log(jobLog, `ℹ No eligible text subtitle found to transfer default — keeping image-based subtitle as default`);
                 }
+            } else {
+                // No image-based subtitle has explicit default — but the first subtitle
+                // becomes implicitly default by track order. If the first subtitle is
+                // image-based (OCR), prefer a text subtitle instead.
+                const anyDefault = manifestEntries.some(e => e.isDefault);
+                const firstIsImageBased = manifestEntries.length > 0 && manifestEntries[0].isImageBased;
+                if (!anyDefault && firstIsImageBased) {
+                    const candidateIdx = manifestEntries.findIndex(e =>
+                        !e.isImageBased && !e.isComment
+                    );
+                    if (candidateIdx !== -1) {
+                        log(jobLog, `🔄 Setting default on text subtitle (no existing default, first track is OCR): ${manifestEntries[candidateIdx].file}`);
+                        manifestEntries[candidateIdx].isDefault = 1;
+                    }
+                }
             }
         }
 
