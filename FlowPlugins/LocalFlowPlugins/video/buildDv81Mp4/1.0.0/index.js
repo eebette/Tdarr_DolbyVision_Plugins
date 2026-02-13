@@ -270,7 +270,15 @@
         });
 
         // --- Subtitle Tracks ---
-        subtitleLines.forEach((line) => {
+        // Sort so the subtitle with isDefault=1 is added first (MP4Box defaults the first track)
+        const sortedSubtitleLines = [...subtitleLines];
+        const defaultSubIdx = sortedSubtitleLines.findIndex(line => line.split("|")[8] === "1");
+        if (defaultSubIdx > 0) {
+            const [defaultLine] = sortedSubtitleLines.splice(defaultSubIdx, 1);
+            sortedSubtitleLines.unshift(defaultLine);
+            log(jobLog, `🔄 Reordered subtitles: moved default track to first position`);
+        }
+        sortedSubtitleLines.forEach((line) => {
             const [filename, , lang, codec, forced, title, hearingImpaired, visualImpaired, isDefault, isComment] = line.split("|");
             const srtPath = path.join(subBaseDir, filename);
             const langFlag = lang ? `:lang=${lang}` : "";
