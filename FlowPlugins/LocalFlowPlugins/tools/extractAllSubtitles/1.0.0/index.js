@@ -401,50 +401,59 @@
             });
         }
 
-        // Transfer default from image-based subtitles to text subtitles if option is enabled
+        // Transfer default from image-based (OCR) subtitles to text subtitles if option is enabled
         if (preferTextDefault) {
-            const defaultImageIdx = manifestEntries.findIndex(e => e.isDefault && e.isImageBased);
-            if (defaultImageIdx !== -1) {
-                const defaultLang = manifestEntries[defaultImageIdx].lang;
-                // Prefer same language, non-image-based, non-commentary
-                let candidateIdx = manifestEntries.findIndex(e =>
-                    !e.isImageBased && !e.isComment && !e.isDefault && e.lang === defaultLang
+            // Find a non-OCR, non-commentary text subtitle candidate
+            const findTextCandidate = (preferLang) => {
+                // Prefer same language first
+                let idx = manifestEntries.findIndex(e =>
+                    !e.isImageBased && !e.isComment && e.lang === preferLang
                 );
-                // Fall back to any non-image-based, non-commentary
-                if (candidateIdx === -1) {
-                    candidateIdx = manifestEntries.findIndex(e =>
-                        !e.isImageBased && !e.isComment && !e.isDefault
+                // Fall back to any non-OCR, non-commentary
+                if (idx === -1) {
+                    idx = manifestEntries.findIndex(e =>
+                        !e.isImageBased && !e.isComment
                     );
                 }
+                return idx;
+            };
+
+            const defaultImageIdx = manifestEntries.findIndex(e => e.isDefault && e.isImageBased);
+            const anyExplicitDefault = manifestEntries.some(e => e.isDefault);
+            const firstIsImageBased = manifestEntries.length > 0 && manifestEntries[0].isImageBased;
+
+            if (defaultImageIdx !== -1) {
+                // An OCR subtitle has the explicit default flag — transfer it to a text subtitle
+                const candidateIdx = findTextCandidate(manifestEntries[defaultImageIdx].lang);
                 if (candidateIdx !== -1) {
-                    // Clear default from all image-based entries
                     manifestEntries.forEach(e => {
                         if (e.isDefault && e.isImageBased) {
-                            log(jobLog, `🔄 Removing default from image-based subtitle: ${e.file}`);
+                            log(jobLog, `🔄 Removing default from OCR subtitle: ${e.file}`);
                             e.isDefault = 0;
                         }
                     });
-                    log(jobLog, `🔄 Setting default on text subtitle: ${manifestEntries[candidateIdx].file}`);
                     manifestEntries[candidateIdx].isDefault = 1;
+                    log(jobLog, `🔄 Setting default on text subtitle: ${manifestEntries[candidateIdx].file}`);
                 } else {
-                    log(jobLog, `ℹ No eligible text subtitle found to transfer default — keeping image-based subtitle as default`);
+                    log(jobLog, `ℹ No eligible text subtitle found to transfer default — keeping OCR subtitle as default`);
                 }
-            } else {
-                // No image-based subtitle has explicit default — but the first subtitle
-                // becomes implicitly default by track order. If the first subtitle is
-                // image-based (OCR), prefer a text subtitle instead.
-                const anyDefault = manifestEntries.some(e => e.isDefault);
-                const firstIsImageBased = manifestEntries.length > 0 && manifestEntries[0].isImageBased;
-                if (!anyDefault && firstIsImageBased) {
-                    const candidateIdx = manifestEntries.findIndex(e =>
-                        !e.isImageBased && !e.isComment
-                    );
-                    if (candidateIdx !== -1) {
-                        log(jobLog, `🔄 Setting default on text subtitle (no existing default, first track is OCR): ${manifestEntries[candidateIdx].file}`);
-                        manifestEntries[candidateIdx].isDefault = 1;
-                    }
+            } else if (!anyExplicitDefault && firstIsImageBased) {
+                // No explicit default, but the first track is OCR (implicit default by order) — set a text subtitle as default
+                const candidateIdx = findTextCandidate(manifestEntries[0].lang);
+                if (candidateIdx !== -1) {
+                    manifestEntries[candidateIdx].isDefault = 1;
+                    log(jobLog, `🔄 Setting default on text subtitle (first track is OCR, no explicit default): ${manifestEntries[candidateIdx].file}`);
                 }
             }
+        }
+
+        // Reorder manifest so the default subtitle is first
+        // (MP4Box defaults the first track; ffmpeg uses disposition flags but order still matters)
+        const defaultManifestIdx = manifestEntries.findIndex(e => e.isDefault);
+        if (defaultManifestIdx > 0) {
+            const [defaultEntry] = manifestEntries.splice(defaultManifestIdx, 1);
+            manifestEntries.unshift(defaultEntry);
+            log(jobLog, `🔄 Reordered manifest: moved default subtitle to first position: ${defaultEntry.file}`);
         }
 
         // Write manifest entries
