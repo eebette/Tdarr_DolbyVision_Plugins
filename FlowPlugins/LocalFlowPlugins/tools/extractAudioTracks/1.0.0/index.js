@@ -274,6 +274,7 @@
             else if (orig_codec.includes("ac3")) orig_codec = "ac3";
             else if (orig_codec.startsWith("dts")) orig_codec = "dts";
             else if (orig_codec === "flac") orig_codec = "flac";
+            else if (orig_codec.startsWith("aac")) orig_codec = "aac";
             else {
                 log(jobLog, `Skipping a:${id}, unsupported codec: ${orig_codec_raw}`);
                 continue;
@@ -375,6 +376,16 @@
                 argsList = [
                     "-y", ...timingInputArgs, "-i", inputPath,
                     "-map", `0:a:${id}`, "-c:a:0", "copy",
+                    ...timingOutputArgs,
+                    path.join(workDir, outFile)
+                ];
+            } else if (orig_codec === "aac") {
+                outFile = `${basePrefix}.aac`;
+                outCodec = "aac";
+                argsList = [
+                    "-y", ...timingInputArgs, "-i", inputPath,
+                    "-map", `0:a:${id}`, "-c:a:0", "copy",
+                    "-f", "adts",
                     ...timingOutputArgs,
                     path.join(workDir, outFile)
                 ];

@@ -71,7 +71,8 @@
             ac3: "Dolby Digital",
             truehd: "TrueHD",
             dts: "DTS",
-            flac: "FLAC"
+            flac: "FLAC",
+            aac: "AAC"
         };
         const codecLabel = labelMap[(codec || "").toLowerCase()] || (codec ? codec.toUpperCase() : "");
         return codecLabel ? `${prettyLang} - ${codecLabel}` : prettyLang;
