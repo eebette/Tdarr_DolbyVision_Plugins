@@ -340,7 +340,7 @@
     {
       "name": "Convert HEVC to DV8.1",
       "sourceRepo": "Local",
-      "pluginName": "convertHevcTo81",
+      "pluginName": "convertHevc",
       "version": "1.0.0",
       "id": "Xh0531Z0A",
       "position": {
