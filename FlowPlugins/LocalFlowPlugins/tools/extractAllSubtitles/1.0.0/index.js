@@ -193,6 +193,14 @@
                 inputType: "boolean",
                 defaultValue: "false",
                 inputUI: { type: "switch" },
+            },
+            {
+                label: "Only Extract Text Subtitles",
+                name: "onlyTextSubtitles",
+                tooltip: "When enabled, image-based subtitle streams (PGS/HDMV) are skipped entirely — no OCR is performed. Only text-based formats (SRT, ASS, SSA, WebVTT, etc.) are extracted.",
+                inputType: "boolean",
+                defaultValue: "false",
+                inputUI: { type: "switch" },
             }
         ],
 
@@ -216,6 +224,7 @@
         const keepOriginal = String(resolveInput(args.inputs.keepOriginalSubtitles, args)) === "true";
         const preserveMetadata = String(resolveInput(args.inputs.preserveMetadata, args)) !== "false";
         const preferTextDefault = String(resolveInput(args.inputs.preferTextDefault, args)) === "true";
+        const onlyTextSubtitles = String(resolveInput(args.inputs.onlyTextSubtitles, args)) === "true";
 
         try {
             if (!fs.existsSync(workDir)) {
@@ -279,6 +288,13 @@
             const outFile = `${baseName}_s${ffmpegIdx}_${safeLang}.srt`;
             const outPath = path.join(workDir, outFile);
             const manifestIndex = mkvTrackNumber || ffmpegIdx;
+            const isImageBased = codec.includes("pgs") || codec.includes("hdmv");
+
+            // Skip image-based streams entirely when onlyTextSubtitles is enabled
+            if (onlyTextSubtitles && isImageBased) {
+                log(jobLog, `⏭ Skipping image-based subtitle (onlyTextSubtitles=true): idx=${ffmpegIdx}, lang=${lang}, codec=${codec}`);
+                continue;
+            }
 
             // Optionally preserve the original subtitle stream as-is
             if (keepOriginal) {
@@ -298,7 +314,7 @@
                     manifestEntries.push({
                         file: origFile, index: manifestIndex, lang, codec, forced,
                         title, hearingImpaired, visualImpaired, isDefault, isComment,
-                        isImageBased: codec.includes("pgs") || codec.includes("hdmv")
+                        isImageBased
                     });
                 } catch (err) {
                     log(jobLog, `⚠ Failed to keep original subtitle idx=${ffmpegIdx}: ${err.message}`);
@@ -397,7 +413,7 @@
                 file: outFile, index: manifestIndex, lang, codec, forced,
                 title: preserveMetadata ? title : "",
                 hearingImpaired, visualImpaired, isDefault, isComment,
-                isImageBased: codec.includes("pgs") || codec.includes("hdmv")
+                isImageBased
             });
         }
 
