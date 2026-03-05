@@ -117,7 +117,6 @@
                 m = line.match(/Track type:\s*(\w+)/);
                 if (m) {
                     current.track_type = m[1];
-                    continue;
                 }
             }
 
@@ -225,6 +224,7 @@
         const preserveMetadata = String(resolveInput(args.inputs.preserveMetadata, args)) !== "false";
         const preferTextDefault = String(resolveInput(args.inputs.preferTextDefault, args)) === "true";
         const onlyTextSubtitles = String(resolveInput(args.inputs.onlyTextSubtitles, args)) === "true";
+        log(jobLog, `ℹ Config: keepOriginal=${keepOriginal}, preserveMetadata=${preserveMetadata}, preferTextDefault=${preferTextDefault}, onlyTextSubtitles=${onlyTextSubtitles}`);
 
         try {
             if (!fs.existsSync(workDir)) {
@@ -276,6 +276,7 @@
             const codec = (s.codec_name || "").toLowerCase();
             const lang = (s.tags?.language || "und").toLowerCase();
             const title = s.tags?.title || "";
+            const delay = parseFloat(s.start_time || 0);
             const forced = s.disposition?.forced ? 1 : 0;
             const hearingImpaired = s.disposition?.hearing_impaired ? 1 : 0;
             const visualImpaired = s.disposition?.visual_impaired ? 1 : 0;
@@ -312,7 +313,7 @@
                     log(jobLog, `📋 Command: ${copyCmd}`);
                     execSync(copyCmd, { stdio: "inherit" });
                     manifestEntries.push({
-                        file: origFile, index: manifestIndex, lang, codec, forced,
+                        file: origFile, index: manifestIndex, lang, codec, delay, forced,
                         title, hearingImpaired, visualImpaired, isDefault, isComment,
                         isImageBased
                     });
@@ -410,7 +411,7 @@
             }
 
             manifestEntries.push({
-                file: outFile, index: manifestIndex, lang, codec, forced,
+                file: outFile, index: manifestIndex, lang, codec, delay, forced,
                 title: preserveMetadata ? title : "",
                 hearingImpaired, visualImpaired, isDefault, isComment,
                 isImageBased
@@ -473,11 +474,11 @@
         }
 
         // Write manifest entries
-        // Manifest format: file|index|lang|codec|forced|title|hearing_impaired|visual_impaired|default|comment
+        // Manifest format: file|index|lang|codec|delay|forced|title|hearing_impaired|visual_impaired|default|comment
         for (const entry of manifestEntries) {
             const line = [
-                entry.file, entry.index, entry.lang, entry.codec, entry.forced,
-                entry.title, entry.hearingImpaired, entry.visualImpaired,
+                entry.file, entry.index, entry.lang, entry.codec, entry.delay,
+                entry.forced, entry.title, entry.hearingImpaired, entry.visualImpaired,
                 entry.isDefault, entry.isComment
             ].join("|") + "\n";
             fs.appendFileSync(exportsFile, line);
