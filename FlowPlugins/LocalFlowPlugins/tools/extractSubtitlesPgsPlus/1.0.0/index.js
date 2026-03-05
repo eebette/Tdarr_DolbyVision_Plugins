@@ -196,6 +196,17 @@
                 inputUI: { type: "switch" },
             },
             {
+                label: "Prefer Text Subtitle as Default",
+                name: "preferTextDefault",
+                tooltip:
+                    "When enabled, if the default subtitle is image-based (PGS), transfer the default flag " +
+                    "to the first non-image-based, non-commentary text subtitle of the same language. " +
+                    "If no suitable text subtitle exists, the default remains unchanged.",
+                inputType: "boolean",
+                defaultValue: "false",
+                inputUI: { type: "switch" },
+            },
+            {
                 label: "Output Directory",
                 name: "outputDirectory",
                 tooltip: "Optional: directory to place exported subtitles. Leave empty to use the Tdarr cache directory.",
@@ -237,6 +248,7 @@
         const ollamaModel = (resolveInput(args.inputs.ollamaModel, args) || "").toString().trim();
         const skipPgsWhenTextExists = String(resolveInput(args.inputs.skipPgsWhenTextExists, args)) !== "false";
         const extractAllPgs = String(resolveInput(args.inputs.extractAllPgs, args)) === "true";
+        const preferTextDefault = String(resolveInput(args.inputs.preferTextDefault, args)) === "true";
         const preserveMetadata = String(resolveInput(args.inputs.preserveMetadata, args)) !== "false";
         const configuredOutputDir = (resolveInput(args.inputs.outputDirectory, args) || "").toString().trim();
         const workDir = configuredOutputDir.length > 0 ? configuredOutputDir : args.workDir;
@@ -452,6 +464,47 @@
                     isComment: s.disposition?.comment ? 1 : 0,
                     isImageBased: true,
                 });
+            }
+        }
+
+        // --- Transfer default from image-based to text subtitles if option is enabled ---
+        if (preferTextDefault) {
+            const findTextCandidate = (preferLang) => {
+                let idx = manifestEntries.findIndex(e =>
+                    !e.isImageBased && !e.isComment && e.lang === preferLang
+                );
+                if (idx === -1) {
+                    idx = manifestEntries.findIndex(e =>
+                        !e.isImageBased && !e.isComment
+                    );
+                }
+                return idx;
+            };
+
+            const defaultImageIdx = manifestEntries.findIndex(e => e.isDefault && e.isImageBased);
+            const anyExplicitDefault = manifestEntries.some(e => e.isDefault);
+            const firstIsImageBased = manifestEntries.length > 0 && manifestEntries[0].isImageBased;
+
+            if (defaultImageIdx !== -1) {
+                const candidateIdx = findTextCandidate(manifestEntries[defaultImageIdx].lang);
+                if (candidateIdx !== -1) {
+                    manifestEntries.forEach(e => {
+                        if (e.isDefault && e.isImageBased) {
+                            log(jobLog, `🔄 Removing default from OCR subtitle: ${e.file}`);
+                            e.isDefault = 0;
+                        }
+                    });
+                    manifestEntries[candidateIdx].isDefault = 1;
+                    log(jobLog, `🔄 Setting default on text subtitle: ${manifestEntries[candidateIdx].file}`);
+                } else {
+                    log(jobLog, `ℹ No eligible text subtitle found to transfer default — keeping OCR subtitle as default`);
+                }
+            } else if (!anyExplicitDefault && firstIsImageBased) {
+                const candidateIdx = findTextCandidate(manifestEntries[0].lang);
+                if (candidateIdx !== -1) {
+                    manifestEntries[candidateIdx].isDefault = 1;
+                    log(jobLog, `🔄 Setting default on text subtitle (first track is OCR, no explicit default): ${manifestEntries[candidateIdx].file}`);
+                }
             }
         }
 
