@@ -86,37 +86,20 @@
         });
     }
 
-    // Fetch latest GPAC .deb link from directory listing (alphabetically last)
-    function fetchLatestGpacDebUrl(jobLog, listUrl) {
-        const targetUrl = listUrl || "https://download.tsi.telecom-paristech.fr/gpac/new_builds/linux64/gpac/";
+    // Fetch latest GPAC .deb URL from the official dist.gpac.io APT repository
+    function fetchLatestGpacDebUrl(jobLog) {
+        const packagesUrl = "https://dist.gpac.io/gpac/linux/ubuntu/dists/noble/nightly/binary-amd64/Packages";
+        const repoBase = "https://dist.gpac.io/gpac/linux/ubuntu/";
 
         return new Promise((resolve, reject) => {
             log(jobLog, "🔎 Checking for latest GPAC/MP4Box build...");
             https
                 .get(
-                    targetUrl,
-                    {
-                        headers: {
-                            "User-Agent": "Tdarr-DV-Installer",
-                        },
-                    },
+                    packagesUrl,
+                    {headers: {"User-Agent": "Tdarr-DV-Installer"}},
                     (res) => {
-                        // Follow redirects
-                        if (
-                            res.statusCode &&
-                            res.statusCode >= 300 &&
-                            res.statusCode < 400 &&
-                            res.headers.location
-                        ) {
-                            const redirected = res.headers.location.startsWith("http")
-                                ? res.headers.location
-                                : new URL(res.headers.location, targetUrl).toString();
-                            resolve(fetchLatestGpacDebUrl(jobLog, redirected));
-                            return;
-                        }
-
                         if (res.statusCode !== 200) {
-                            reject(new Error(`Failed to fetch GPAC listing: HTTP ${res.statusCode}`));
+                            reject(new Error(`Failed to fetch GPAC package listing: HTTP ${res.statusCode}`));
                             return;
                         }
 
@@ -124,20 +107,22 @@
                         res.on("data", (chunk) => chunks.push(chunk));
                         res.on("end", () => {
                             const body = Buffer.concat(chunks).toString();
-                            const regex = /href="([^"]*gpac_[^"]+?\.deb)"|href='([^']*gpac_[^']+?\.deb)'/gi;
-                            const matches = [];
-                            let match;
-                            while ((match = regex.exec(body))) {
-                                const link = match[1] || match[2];
-                                if (link) matches.push(link);
+                            // Find all Filename entries for the gpac package (not libgpac-dev)
+                            // Packages file format: blocks separated by blank lines
+                            const blocks = body.split(/\n\n+/);
+                            let latestFilename = "";
+                            for (const block of blocks) {
+                                const pkgMatch = block.match(/^Package:\s*(.+)$/m);
+                                const fileMatch = block.match(/^Filename:\s*(.+)$/m);
+                                if (pkgMatch && pkgMatch[1].trim() === "gpac" && fileMatch) {
+                                    latestFilename = fileMatch[1].trim();
+                                }
                             }
-                            if (!matches.length) {
-                                reject(new Error("No GPAC .deb links found in listing"));
+                            if (!latestFilename) {
+                                reject(new Error("No GPAC .deb found in APT repository listing"));
                                 return;
                             }
-                            matches.sort();
-                            const latest = matches[matches.length - 1];
-                            const url = latest.startsWith("http") ? latest : new URL(latest, targetUrl).toString();
+                            const url = repoBase + latestFilename;
                             log(jobLog, `🆕 Latest GPAC build detected: ${url}`);
                             resolve(url);
                         });
