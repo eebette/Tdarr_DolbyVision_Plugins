@@ -258,7 +258,7 @@
             // Convert delay from seconds to milliseconds for MP4Box
             const delaySeconds = parseFloat(delay || 0);
             const delayMs = Math.round(delaySeconds * 1000);
-            const delayFlag = delayMs > 0 ? `:delay=${delayMs}` : "";
+            const delayFlag = delayMs !== 0 ? `:delay=${delayMs}` : "";
 
             const isConverted = newCodec !== origCodec;
             const convMark = isConverted ? " (Converted)" : "";
@@ -272,11 +272,17 @@
 
         // --- Subtitle Tracks ---
         // Manifest order from extractAllSubtitles determines track order (default subtitle is first)
+        // Manifest format: file|index|lang|codec|delay|forced|title|hearing_impaired|visual_impaired|default|comment
         subtitleLines.forEach((line) => {
-            const [filename, , lang, codec, forced, title, hearingImpaired, visualImpaired, isDefault, isComment] = line.split("|");
+            const [filename, , lang, codec, delay, forced, title, hearingImpaired, visualImpaired, isDefault, isComment] = line.split("|");
             const srtPath = path.join(subBaseDir, filename);
             const langFlag = lang ? `:lang=${lang}` : "";
             const forcedFlag = forced === "1" ? ":forced" : "";
+
+            // Convert delay from seconds to milliseconds for MP4Box
+            const delaySeconds = parseFloat(delay || 0);
+            const delayMs = Math.round(delaySeconds * 1000);
+            const delayFlag = delayMs !== 0 ? `:delay=${delayMs}` : "";
 
             const codecLower = (codec || "").toLowerCase();
             const isOcr = codecLower.includes("pgs") || codecLower.includes("hdmv");
@@ -288,8 +294,9 @@
             const commentMark = isComment === "1" && !/\bcommentary\b/i.test(baseTitle) ? " [Commentary]" : "";
             const name = formatNameFlag(`${baseTitle}${forcedMark}${hiMark}${viMark}${commentMark}`, convMark);
 
-            mp4Args.push("-add", `${srtPath}${langFlag}${forcedFlag}${name}`);
-            log(jobLog, `💬 Subtitle: ${filename} | lang=${lang} | OCR=${isOcr} | forced=${forced === "1"} | HI=${hearingImpaired === "1"} | VI=${visualImpaired === "1"} | default=${isDefault === "1"} | comment=${isComment === "1"}`);
+            mp4Args.push("-add", `${srtPath}${langFlag}${forcedFlag}${delayFlag}${name}`);
+            const delayInfo = delayMs !== 0 ? ` | delay=${delaySeconds.toFixed(3)}s (${delayMs}ms)` : "";
+            log(jobLog, `💬 Subtitle: ${filename} | lang=${lang} | OCR=${isOcr} | forced=${forced === "1"} | HI=${hearingImpaired === "1"} | VI=${visualImpaired === "1"} | default=${isDefault === "1"} | comment=${isComment === "1"}${delayInfo}`);
         });
 
         if (rpuFilePath) {
