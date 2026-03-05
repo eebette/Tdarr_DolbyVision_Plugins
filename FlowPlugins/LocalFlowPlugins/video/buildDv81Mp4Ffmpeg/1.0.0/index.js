@@ -8,8 +8,10 @@
     /**
      * FFmpeg DV8.1 MP4 Remux Plugin
      * - Copies video stream bit-for-bit from input file
-     * - Reads audio.exports + subtitles.exports metadata
-     * - Remuxes to MP4 with ffmpeg instead of MP4Box
+     * - Transcodes/copies audio streams directly from input file
+     *   (TrueHD/DTS → EAC3, FLAC → ALAC, others copied as-is)
+     * - Reads subtitles.exports metadata for subtitle tracks
+     * - Remuxes everything to MP4 in a single ffmpeg command
      */
 
     const fs = require("fs");
@@ -53,7 +55,21 @@
         return "";
     }
 
-    // Build a sensible audio title when none was supplied in the manifest
+    // Normalize codec name to a canonical form
+    function normalizeCodec(codecName) {
+        const codec = (codecName || "").toLowerCase();
+        if (codec.includes("truehd")) return "truehd";
+        if (codec.includes("eac3")) return "eac3";
+        if (codec.includes("ac3")) return "ac3";
+        if (codec.startsWith("dts")) return "dts";
+        if (codec === "flac") return "flac";
+        if (codec.startsWith("aac")) return "aac";
+        return codec;
+    }
+
+    const SUPPORTED_AUDIO_CODECS = ["truehd", "eac3", "ac3", "dts", "flac", "aac"];
+
+    // Build a sensible audio title when none was supplied
     function buildAudioTitle(title, lang, codec) {
         const cleaned = (title || "").trim();
         if (cleaned) return cleaned;
@@ -66,6 +82,7 @@
             truehd: "TrueHD",
             dts: "DTS",
             flac: "FLAC",
+            alac: "ALAC",
             aac: "AAC"
         };
         const codecLabel = labelMap[(codec || "").toLowerCase()] || (codec ? codec.toUpperCase() : "");
@@ -104,7 +121,7 @@
 
     const details = () => ({
         name: "Build DV8.1 MP4 (FFmpeg)",
-        description: "Remux input video (copied bit-for-bit), audio, and subtitles into MP4 using ffmpeg.",
+        description: "Remux video (bit-for-bit copy), transcode/copy audio, and add subtitles into MP4 using a single ffmpeg command. Replaces the need for a separate Extract Audio Tracks step.",
         style: {borderColor: "green"},
         tags: "video",
         isStartPlugin: false,
@@ -114,17 +131,25 @@
         icon: "faFilm",
         inputs: [
             {
-                label: "Audio Exports Path",
-                name: "audioExportsPath",
-                tooltip: "Path to audio exports manifest (from Extract Audio Tracks). Leave empty to use Tdarr cache directory + <basename>_audio.exports.",
-                inputType: "string",
-                defaultValue: "",
-                inputUI: { type: "directory" },
+                label: "Convert TrueHD/DTS to EAC3",
+                name: "convertTruehdDtsToEac3",
+                tooltip: "Enable to transcode TrueHD/DTS audio tracks to EAC3 (Dolby Digital Plus). If disabled, these codecs will be copied as-is (may not be compatible with all MP4 players).",
+                inputType: "boolean",
+                defaultValue: "true",
+                inputUI: { type: "switch" },
+            },
+            {
+                label: "Convert FLAC to ALAC",
+                name: "convertFlacToAlac",
+                tooltip: "Enable to transcode FLAC audio tracks to ALAC (Apple Lossless). Useful for MP4 containers which don't natively support FLAC in all players.",
+                inputType: "boolean",
+                defaultValue: "false",
+                inputUI: { type: "switch" },
             },
             {
                 label: "Subtitle Exports Path",
                 name: "subtitleExportsPath",
-                tooltip: "Path to subtitle exports manifest (optional). Leave empty to use Tdarr cache directory + <basename>_subtitles.exports.",
+                tooltip: "Path to subtitle exports manifest (from Extract All Subtitles). Leave empty to use Tdarr cache directory + <basename>_subtitles.exports.",
                 inputType: "string",
                 defaultValue: "",
                 inputUI: { type: "directory" },
@@ -140,7 +165,7 @@
             {
                 label: "Delete Sources After Remux",
                 name: "deleteSourcesAfterRemux",
-                tooltip: "Delete the audio/subtitle exports and track files after remux completes.",
+                tooltip: "Delete the subtitle exports and track files after remux completes.",
                 inputType: "boolean",
                 defaultValue: "true",
                 inputUI: { type: "switch" },
@@ -161,8 +186,8 @@
         const inputPath = inputFileObj.file;
         const baseName = path.basename(inputPath, path.extname(inputPath));
 
-        const audioExportsFile = (resolveInput(args.inputs.audioExportsPath, args)?.toString().trim()) ||
-            path.join(args.workDir, `${baseName}_audio.exports`);
+        const convertTruehdDtsToEac3 = String(resolveInput(args.inputs.convertTruehdDtsToEac3, args)) === "true";
+        const convertFlacToAlac = String(resolveInput(args.inputs.convertFlacToAlac, args)) === "true";
 
         const userSubtitleExportsInput = (resolveInput(args.inputs.subtitleExportsPath, args) || "").toString().trim() || "";
         const subtitleExportsFile = userSubtitleExportsInput.length > 0
@@ -172,107 +197,161 @@
         const configuredOutputDir = (resolveInput(args.inputs.outputDirectory, args) || "").toString().trim() || "";
         const outputDir = configuredOutputDir.length > 0 ? configuredOutputDir : args.workDir;
 
-        if (!fs.existsSync(audioExportsFile)) {
-            log(jobLog, `🚫 Audio exports not found: ${audioExportsFile}`);
-            return {outputFileObj: inputFileObj, outputNumber: 1, variables: args.variables};
+        // --- Audio: read streams directly from input file ---
+        const streams = inputFileObj.ffProbeData?.streams || [];
+        const audioStreams = streams.filter((s) => s.codec_type === "audio");
+
+        if (!audioStreams.length) {
+            log(jobLog, "⚠ No audio streams found in input file.");
         }
 
+        // --- Subtitles: read from manifest (produced by Extract All Subtitles) ---
         const subtitleExists = subtitleExportsFile && fs.existsSync(subtitleExportsFile);
         if (userSubtitleExportsInput && !subtitleExists) {
             log(jobLog, `⚠ Subtitle exports path provided but file not found: ${subtitleExportsFile}`);
         }
 
-        const audioLines = fs.readFileSync(audioExportsFile, "utf-8").trim().split("\n").filter(Boolean);
         const subtitleLines = subtitleExists
             ? fs.readFileSync(subtitleExportsFile, "utf-8").trim().split("\n").filter(Boolean)
             : [];
         const deleteSources = String(resolveInput(args.inputs.deleteSourcesAfterRemux, args)) === "true";
-
-        const audioBaseDir = path.dirname(audioExportsFile);
         const subBaseDir = subtitleExists ? path.dirname(subtitleExportsFile) : args.workDir;
 
-        // Ensure output file has .mp4 extension (baseName has no extension)
         const outputFile = path.join(outputDir, `${baseName}.mp4`);
 
         log(jobLog, `Input: ${inputPath}`);
         log(jobLog, `Output: ${outputFile}`);
+        log(jobLog, `Audio streams: ${audioStreams.length} | Subtitle tracks: ${subtitleLines.length}`);
+        log(jobLog, `Convert TrueHD/DTS → EAC3: ${convertTruehdDtsToEac3} | Convert FLAC → ALAC: ${convertFlacToAlac}`);
 
-        // Build ffmpeg args list
+        // =====================================================================
+        // Build ffmpeg command
+        // =====================================================================
+
+        // Input 0: source file (video + audio)
         const ffmpegArgs = ["-y", "-fflags", "+genpts", "-i", inputPath];
 
-        // Add all audio input files
-        const audioFilePaths = [];
-        const audioDelays = [];
-        audioLines.forEach((line) => {
+        // Inputs 1..N: subtitle files from manifest
+        // Manifest format: file|index|lang|codec|delay|forced|title|hearing_impaired|visual_impaired|default|comment
+        const subtitleFilePaths = [];
+        subtitleLines.forEach((line) => {
             const [filename, , , , delay] = line.split("|");
-            const filePath = path.join(audioBaseDir, filename);
+            const filePath = path.join(subBaseDir, filename);
             const delaySeconds = parseFloat(delay || 0);
-            audioFilePaths.push(filePath);
-            audioDelays.push(delaySeconds);
+            subtitleFilePaths.push(filePath);
 
-            // Apply delay offset if needed
-            if (delaySeconds > 0) {
+            // Apply delay offset to compensate for timestamp normalization during extraction
+            if (delaySeconds !== 0) {
                 ffmpegArgs.push("-itsoffset", delaySeconds.toString());
             }
             ffmpegArgs.push("-i", filePath);
-            // Reset itsoffset after each audio input to prevent affecting subsequent inputs
-            if (delaySeconds > 0) {
-                ffmpegArgs.push("-itsoffset", "0");
-            }
         });
 
-        // Add all subtitle input files
-        const subtitleFilePaths = [];
-        subtitleLines.forEach((line) => {
-            const [filename] = line.split("|");
-            const filePath = path.join(subBaseDir, filename);
-            subtitleFilePaths.push(filePath);
-            ffmpegArgs.push("-i", filePath);
-        });
+        // --- Stream mapping ---
 
-        // Map video from input file (index 0)
+        // Map video from input file
         ffmpegArgs.push("-map", "0:v:0");
 
-        // Map all audio files (starting from index 1)
-        audioLines.forEach((_, idx) => {
-            ffmpegArgs.push("-map", `${idx + 1}:a:0`);
-        });
+        // Determine audio stream mapping and per-stream codec settings
+        const audioTrackInfo = [];
+        let needEac3Opts = false;
 
-        // Map all subtitle files (starting after audio files)
+        for (const [inputIdx, s] of audioStreams.entries()) {
+            const origCodecRaw = (s.codec_name || "").toLowerCase();
+            const codec = normalizeCodec(origCodecRaw);
+
+            if (!SUPPORTED_AUDIO_CODECS.includes(codec)) {
+                log(jobLog, `Skipping a:${inputIdx}, unsupported codec: ${origCodecRaw}`);
+                continue;
+            }
+
+            const lang = (s.tags?.language || "und").toLowerCase();
+            const title = (s.tags?.title || "").replace(/\s*\|\s*/g, " / ");
+            const outIdx = audioTrackInfo.length;
+
+            let outCodec;
+            let isConverted = false;
+
+            // Map this audio stream from input file
+            ffmpegArgs.push("-map", `0:a:${inputIdx}`);
+
+            if ((codec === "truehd" || codec === "dts") && convertTruehdDtsToEac3) {
+                // Transcode to EAC3
+                outCodec = "eac3";
+                isConverted = true;
+                needEac3Opts = true;
+                ffmpegArgs.push(`-c:a:${outIdx}`, "eac3");
+                ffmpegArgs.push(`-b:a:${outIdx}`, "1024k");
+                ffmpegArgs.push(`-filter:a:${outIdx}`, "aresample=async=1:first_pts=0");
+            } else if (codec === "flac" && convertFlacToAlac) {
+                // Transcode FLAC to ALAC
+                outCodec = "alac";
+                isConverted = true;
+                ffmpegArgs.push(`-c:a:${outIdx}`, "alac");
+            } else {
+                // Copy as-is (eac3, ac3, aac, flac, or truehd/dts when convert is off)
+                outCodec = codec;
+                ffmpegArgs.push(`-c:a:${outIdx}`, "copy");
+            }
+
+            audioTrackInfo.push({inputIdx, outIdx, codec, outCodec, isConverted, lang, title});
+        }
+
+        // Map subtitle files (input indices start at 1 since input 0 is the source file)
         subtitleLines.forEach((_, idx) => {
-            ffmpegArgs.push("-map", `${audioLines.length + idx + 1}:s:0`);
+            ffmpegArgs.push("-map", `${idx + 1}:s:0`);
         });
 
-        // Set codecs
+        // --- Codec settings ---
+
+        // Video: bit-for-bit copy with hvc1 tag for HEVC in MP4
         ffmpegArgs.push("-c:v", "copy");
         ffmpegArgs.push("-tag:v", "hvc1");
         ffmpegArgs.push("-strict", "unofficial");
-        ffmpegArgs.push("-c:a", "copy");
-        ffmpegArgs.push("-c:s", "mov_text");
 
-        // Add metadata for each audio track
-        audioLines.forEach((line, idx) => {
-            const [filename, , newCodec, origCodec, delay, lang, title] = line.split("|");
+        // Global EAC3 encoder options (only relevant if any stream is being transcoded to EAC3)
+        if (needEac3Opts) {
+            ffmpegArgs.push(
+                "-dialnorm", "-27",
+                "-room_type", "0",
+                "-mixing_level", "80",
+                "-ad_conv_type", "0",
+                "-stereo_rematrixing", "true",
+                "-ltrt_cmixlev", "0.707",
+                "-ltrt_surmixlev", "0.707",
+                "-loro_cmixlev", "0.707",
+                "-loro_surmixlev", "0.707"
+            );
+        }
+
+        // Subtitles: convert to mov_text for MP4
+        if (subtitleLines.length > 0) {
+            ffmpegArgs.push("-c:s", "mov_text");
+        }
+
+        // --- Metadata ---
+
+        // Audio track metadata
+        for (const track of audioTrackInfo) {
+            const {outIdx, codec, outCodec, isConverted, lang, title} = track;
 
             if (lang) {
-                ffmpegArgs.push(`-metadata:s:a:${idx}`, `language=${lang}`);
+                ffmpegArgs.push(`-metadata:s:a:${outIdx}`, `language=${lang}`);
             }
 
-            const isConverted = newCodec !== origCodec;
             const convMark = isConverted ? " (Converted)" : "";
-            const trackTitle = buildAudioTitle(title, lang, newCodec) + convMark;
+            const trackTitle = buildAudioTitle(title, lang, outCodec) + convMark;
 
-            ffmpegArgs.push(`-metadata:s:a:${idx}`, `title=${trackTitle}`);
-            ffmpegArgs.push(`-metadata:s:a:${idx}`, `handler_name=${trackTitle}`);
+            ffmpegArgs.push(`-metadata:s:a:${outIdx}`, `title=${trackTitle}`);
+            ffmpegArgs.push(`-metadata:s:a:${outIdx}`, `handler_name=${trackTitle}`);
 
-            const delaySeconds = parseFloat(delay || 0);
-            const delayInfo = delaySeconds > 0 ? ` | delay=${delaySeconds.toFixed(3)}s` : "";
-            log(jobLog, `🎧 Audio ${idx}: ${filename} | lang=${lang} | converted=${isConverted}${delayInfo}`);
-        });
+            log(jobLog, `🎧 Audio ${outIdx}: a:${track.inputIdx} ${codec} → ${outCodec} | lang=${lang} | converted=${isConverted}`);
+        }
 
-        // Add metadata for each subtitle track
+        // Subtitle track metadata
+        // Manifest format: file|index|lang|codec|delay|forced|title|hearing_impaired|visual_impaired|default|comment
         subtitleLines.forEach((line, idx) => {
-            const [filename, , lang, codec, forced, title, hearingImpaired, visualImpaired, isDefault, isComment] = line.split("|");
+            const [filename, , lang, codec, delay, forced, title, hearingImpaired, visualImpaired, isDefault, isComment] = line.split("|");
 
             if (lang) {
                 ffmpegArgs.push(`-metadata:s:s:${idx}`, `language=${lang}`);
@@ -301,12 +380,13 @@
             log(jobLog, `💬 Subtitle ${idx}: ${filename} | lang=${lang} | OCR=${isOcr} | forced=${forced === "1"} | HI=${hearingImpaired === "1"} | VI=${visualImpaired === "1"} | default=${isDefault === "1"} | comment=${isComment === "1"}`);
         });
 
-        // Force MP4 output format
+        // --- Output ---
         ffmpegArgs.push("-f", "mp4");
-
-        // Output file
         ffmpegArgs.push(outputFile);
 
+        // =====================================================================
+        // Run ffmpeg
+        // =====================================================================
         try {
             await runFFmpeg(ffmpegArgs, jobLog);
         } catch (err) {
@@ -316,14 +396,14 @@
 
         log(jobLog, `🎉 SUCCESS — MP4 Created: ${outputFile}`);
 
+        // =====================================================================
+        // Cleanup subtitle source files
+        // =====================================================================
         if (deleteSources) {
-            log(jobLog, "🧹 Deleting source files used for remux...");
+            log(jobLog, "🧹 Deleting subtitle source files...");
 
             const toDelete = new Set();
-            toDelete.add(audioExportsFile);
             if (subtitleExists) toDelete.add(subtitleExportsFile);
-
-            audioFilePaths.forEach(file => toDelete.add(file));
             subtitleFilePaths.forEach(file => toDelete.add(file));
 
             for (const filePath of toDelete) {
