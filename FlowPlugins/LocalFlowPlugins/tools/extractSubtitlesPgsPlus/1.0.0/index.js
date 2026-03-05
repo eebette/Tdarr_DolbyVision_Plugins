@@ -414,7 +414,8 @@
                     cmdParts.push("--model", ollamaModel);
                 }
 
-                cmdParts.push("--output", outPath);
+                // PgsToSrtPlus treats --output as a directory, not a file path
+                cmdParts.push("--output", workDir);
 
                 try {
                     await runProcess(cmdParts, jobLog, 0);
@@ -424,28 +425,30 @@
                     continue;
                 }
 
-                if (!fs.existsSync(outPath)) {
-                    // PgsToSrtPlus may have written to its auto-generated name
-                    // ({inputBaseName}.{lang}.srt) instead of the --output path.
-                    // Check likely locations and rename if found.
-                    const autoName = `${path.basename(inputPath, path.extname(inputPath))}.${lang}.srt`;
-                    const candidates = [
-                        path.join(workDir, autoName),
-                        path.join(path.dirname(inputPath), autoName),
-                    ];
-                    let found = false;
+                // PgsToSrtPlus writes to auto-generated name: {inputBaseName}.{lang}.srt
+                // Find it and rename to our expected output filename
+                const autoName = `${path.basename(inputPath, path.extname(inputPath))}.${lang}.srt`;
+                const candidates = [
+                    path.join(workDir, autoName),
+                    path.join(path.dirname(inputPath), autoName),
+                ];
+
+                let outputReady = fs.existsSync(outPath) && fs.statSync(outPath).isFile();
+
+                if (!outputReady) {
                     for (const candidate of candidates) {
-                        if (fs.existsSync(candidate)) {
-                            log(jobLog, `  🔄 Found PgsToSrtPlus output at auto-generated path: ${candidate}`);
+                        if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+                            log(jobLog, `  🔄 Found PgsToSrtPlus output at: ${candidate}`);
                             fs.renameSync(candidate, outPath);
-                            found = true;
+                            outputReady = true;
                             break;
                         }
                     }
-                    if (!found) {
-                        log(jobLog, `  🚫 PgsToSrtPlus produced no output for track idx=${ffmpegIdx}`);
-                        continue;
-                    }
+                }
+
+                if (!outputReady) {
+                    log(jobLog, `  🚫 PgsToSrtPlus produced no output for track idx=${ffmpegIdx}`);
+                    continue;
                 }
 
                 log(jobLog, `  ✔ PgsToSrtPlus output: ${outFile}`);
