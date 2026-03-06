@@ -385,7 +385,17 @@
                 continue;
             }
 
-            const tracksToExtract = extractAllPgs ? pgsStreams : [pgsStreams[0]];
+            let tracksToExtract;
+            if (extractAllPgs) {
+                tracksToExtract = pgsStreams;
+            } else {
+                // Select all forced tracks + first non-forced, non-commentary track
+                const forced = pgsStreams.filter(s => s.disposition?.forced);
+                const main = pgsStreams.find(s => !s.disposition?.forced && !s.disposition?.comment);
+                tracksToExtract = [...forced];
+                if (main) tracksToExtract.push(main);
+                if (tracksToExtract.length === 0) tracksToExtract = [pgsStreams[0]];
+            }
             log(jobLog, `  🖼 Running PgsToSrtPlus on ${tracksToExtract.length} PGS track(s) for ${lang}`);
 
             for (const s of tracksToExtract) {
@@ -401,9 +411,9 @@
 
                 cmdParts.push("--language", lang);
 
-                // In "extract all" mode, specify exact track index
-                // In "extract first" mode, let PgsToSrtPlus auto-detect via --language
-                if (extractAllPgs && pgsIdx !== undefined) {
+                // Always specify --track so we control exactly which PGS track
+                // is processed (prevents PgsToSrtPlus from auto-selecting unexpectedly)
+                if (pgsIdx !== undefined) {
                     cmdParts.push("--track", pgsIdx.toString());
                 }
 
