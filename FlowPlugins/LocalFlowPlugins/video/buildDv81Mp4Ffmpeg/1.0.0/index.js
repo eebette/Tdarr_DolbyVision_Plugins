@@ -98,6 +98,7 @@
             }
 
             const child = spawn("ffmpeg", ffmpegArgs, {stdio: "pipe"});
+            const stderrLines = [];
 
             child.on("error", (err) => {
                 reject(new Error(`Failed to start ffmpeg: ${err.message}`));
@@ -109,12 +110,19 @@
 
             child.stderr.on("data", (data) => {
                 const output = data.toString().trim();
-                if (output) console.log(`[ffmpeg] ${output}`);
+                if (output) {
+                    console.log(`[ffmpeg] ${output}`);
+                    stderrLines.push(output);
+                }
             });
 
             child.on("close", (code) => {
                 if (code === 0) return resolve();
-                reject(new Error(`ffmpeg exited with code ${code}`));
+                const lastLines = stderrLines.slice(-20).join('\n');
+                if (jobLog) {
+                    jobLog(`🚨 FFmpeg stderr (last 20 lines):\n${lastLines}`);
+                }
+                reject(new Error(`ffmpeg exited with code ${code}\n${lastLines}`));
             });
         });
     }
@@ -325,8 +333,14 @@
         }
 
         // Subtitles: convert to mov_text for MP4
+        // Use millisecond timescale to prevent duration overflow in MP4 muxer.
+        // Sparse subtitle tracks (e.g. forced) can have long gaps whose durations
+        // exceed INT32_MAX at high timescales, crashing the muxer.
         if (subtitleLines.length > 0) {
             ffmpegArgs.push("-c:s", "mov_text");
+            for (let i = 0; i < subtitleLines.length; i++) {
+                ffmpegArgs.push(`-enc_time_base:s:${i}`, "1/1000");
+            }
         }
 
         // --- Metadata ---
