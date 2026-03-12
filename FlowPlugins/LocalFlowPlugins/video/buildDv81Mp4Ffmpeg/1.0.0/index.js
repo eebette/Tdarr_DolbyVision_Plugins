@@ -24,6 +24,84 @@
         console.log(msg);
     }
 
+    // Maximum gap (in seconds) allowed between subtitle entries in an SRT file.
+    // The MP4 muxer uses microsecond precision (1/1000000) for mov_text tracks.
+    // Gaps longer than ~35.8 minutes exceed INT32_MAX microseconds, causing
+    // "Packet duration is out of range" errors. We use 30 minutes as a safe limit.
+    const MAX_SRT_GAP_SECONDS = 30 * 60;
+
+    function parseSrtTime(str) {
+        const m = str.trim().match(/^(\d+):(\d+):(\d+)[,.](\d+)$/);
+        if (!m) return 0;
+        return parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseInt(m[3]) + parseInt(m[4]) / 1000;
+    }
+
+    function formatSrtTime(seconds) {
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = Math.floor(seconds % 60);
+        const ms = Math.round((seconds % 1) * 1000);
+        return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")},${String(ms).padStart(3, "0")}`;
+    }
+
+    /**
+     * Split any gaps in an SRT file that exceed MAX_SRT_GAP_SECONDS by inserting
+     * invisible filler entries. This prevents the MP4 muxer from creating mov_text
+     * packets with durations that overflow INT32_MAX at microsecond precision.
+     * Returns true if the file was modified.
+     */
+    function splitLongSrtGaps(filePath, jobLog) {
+        const content = fs.readFileSync(filePath, "utf-8");
+        const blocks = content.trim().split(/\r?\n\r?\n/);
+        const entries = [];
+        for (const block of blocks) {
+            const lines = block.trim().split(/\r?\n/);
+            if (lines.length < 2) continue;
+            const timeMatch = lines[1].match(/^(.+?)\s*-->\s*(.+?)$/);
+            if (!timeMatch) continue;
+            entries.push({
+                start: parseSrtTime(timeMatch[1]),
+                end: parseSrtTime(timeMatch[2]),
+                text: lines.slice(2).join("\n"),
+            });
+        }
+
+        if (entries.length === 0) return false;
+
+        let needsFix = false;
+        // Check gap before first entry (from time 0)
+        if (entries[0].start > MAX_SRT_GAP_SECONDS) needsFix = true;
+        for (let i = 1; i < entries.length && !needsFix; i++) {
+            if (entries[i].start - entries[i - 1].end > MAX_SRT_GAP_SECONDS) {
+                needsFix = true;
+            }
+        }
+        if (!needsFix) return false;
+
+        const newEntries = [];
+        for (let i = 0; i < entries.length; i++) {
+            const gapStart = i === 0 ? 0 : entries[i - 1].end;
+            const gapEnd = entries[i].start;
+            if (gapEnd - gapStart > MAX_SRT_GAP_SECONDS) {
+                let t = gapStart + MAX_SRT_GAP_SECONDS;
+                while (t < gapEnd - 1) {
+                    newEntries.push({start: t, end: t + 0.001, text: ""});
+                    t += MAX_SRT_GAP_SECONDS;
+                }
+            }
+            newEntries.push(entries[i]);
+        }
+
+        const output = newEntries.map((e, idx) =>
+            `${idx + 1}\n${formatSrtTime(e.start)} --> ${formatSrtTime(e.end)}\n${e.text}`
+        ).join("\n\n") + "\n";
+
+        fs.writeFileSync(filePath, output, "utf-8");
+        const added = newEntries.length - entries.length;
+        log(jobLog, `🔧 Split long subtitle gaps in: ${path.basename(filePath)} (${added} filler(s) added)`);
+        return true;
+    }
+
     // Resolve inputs that may be wrapped in {{{ }}} to reference args.* values
     function resolveInput(value, args) {
         if (typeof value !== "string") return value;
@@ -239,6 +317,15 @@
         // Input 0: source file (video + audio)
         const ffmpegArgs = ["-y", "-fflags", "+genpts", "-i", inputPath];
 
+        // Pre-process SRT files: split any gaps > 30 min to prevent MP4 muxer overflow
+        subtitleLines.forEach((line) => {
+            const [filename] = line.split("|");
+            const filePath = path.join(subBaseDir, filename);
+            if (filePath.toLowerCase().endsWith(".srt") && fs.existsSync(filePath)) {
+                splitLongSrtGaps(filePath, jobLog);
+            }
+        });
+
         // Inputs 1..N: subtitle files from manifest
         // Manifest format: file|index|lang|codec|delay|forced|title|hearing_impaired|visual_impaired|default|comment
         const subtitleFilePaths = [];
@@ -333,14 +420,8 @@
         }
 
         // Subtitles: convert to mov_text for MP4
-        // Use millisecond timescale to prevent duration overflow in MP4 muxer.
-        // Sparse subtitle tracks (e.g. forced) can have long gaps whose durations
-        // exceed INT32_MAX at high timescales, crashing the muxer.
         if (subtitleLines.length > 0) {
             ffmpegArgs.push("-c:s", "mov_text");
-            for (let i = 0; i < subtitleLines.length; i++) {
-                ffmpegArgs.push(`-enc_time_base:s:${i}`, "1/1000");
-            }
         }
 
         // --- Metadata ---
