@@ -48,7 +48,9 @@
      * Split any gaps in an SRT file that exceed MAX_SRT_GAP_SECONDS by inserting
      * invisible filler entries. This prevents the MP4 muxer from creating mov_text
      * packets with durations that overflow INT32_MAX at microsecond precision.
-     * Returns true if the file was modified.
+     * Returns the path to use for ffmpeg input — either the original (if no fix
+     * needed) or a new temp file with gaps split (to avoid EACCES on Docker-
+     * created files we cannot modify in-place).
      */
     function splitLongSrtGaps(filePath, jobLog) {
         const content = fs.readFileSync(filePath, "utf-8");
@@ -66,7 +68,7 @@
             });
         }
 
-        if (entries.length === 0) return false;
+        if (entries.length === 0) return filePath;
 
         let needsFix = false;
         // Check gap before first entry (from time 0)
@@ -76,7 +78,7 @@
                 needsFix = true;
             }
         }
-        if (!needsFix) return false;
+        if (!needsFix) return filePath;
 
         const newEntries = [];
         for (let i = 0; i < entries.length; i++) {
@@ -96,10 +98,14 @@
             `${idx + 1}\n${formatSrtTime(e.start)} --> ${formatSrtTime(e.end)}\n${e.text}`
         ).join("\n\n") + "\n";
 
-        fs.writeFileSync(filePath, output, "utf-8");
+        // Write to a temp file to avoid EACCES on Docker-created originals
+        const ext = path.extname(filePath);
+        const base = filePath.slice(0, -ext.length);
+        const outPath = `${base}_gapfix${ext}`;
+        fs.writeFileSync(outPath, output, "utf-8");
         const added = newEntries.length - entries.length;
-        log(jobLog, `🔧 Split long subtitle gaps in: ${path.basename(filePath)} (${added} filler(s) added)`);
-        return true;
+        log(jobLog, `🔧 Split long subtitle gaps in: ${path.basename(filePath)} → ${path.basename(outPath)} (${added} filler(s) added)`);
+        return outPath;
     }
 
     // Resolve inputs that may be wrapped in {{{ }}} to reference args.* values
@@ -317,12 +323,17 @@
         // Input 0: source file (video + audio)
         const ffmpegArgs = ["-y", "-fflags", "+genpts", "-i", inputPath];
 
-        // Pre-process SRT files: split any gaps > 30 min to prevent MP4 muxer overflow
+        // Pre-process SRT files: split any gaps > 30 min to prevent MP4 muxer overflow.
+        // Build a map of original path → fixed path for SRTs that needed splitting.
+        const srtPathMap = new Map();
         subtitleLines.forEach((line) => {
             const [filename] = line.split("|");
             const filePath = path.join(subBaseDir, filename);
             if (filePath.toLowerCase().endsWith(".srt") && fs.existsSync(filePath)) {
-                splitLongSrtGaps(filePath, jobLog);
+                const fixedPath = splitLongSrtGaps(filePath, jobLog);
+                if (fixedPath !== filePath) {
+                    srtPathMap.set(filePath, fixedPath);
+                }
             }
         });
 
@@ -331,7 +342,8 @@
         const subtitleFilePaths = [];
         subtitleLines.forEach((line) => {
             const [filename, , , , delay] = line.split("|");
-            const filePath = path.join(subBaseDir, filename);
+            const originalPath = path.join(subBaseDir, filename);
+            const filePath = srtPathMap.get(originalPath) || originalPath;
             const delaySeconds = parseFloat(delay || 0);
             subtitleFilePaths.push(filePath);
 
