@@ -476,6 +476,10 @@
         });
 
         // --- Output ---
+        // Disable interleave delta check to prevent "Packet duration is out of range"
+        // errors. Sparse subtitle tracks cause large gaps between subtitle and
+        // audio/video packets, exceeding the MP4 muxer's INT32_MAX µs limit.
+        ffmpegArgs.push("-max_interleave_delta", "0");
         ffmpegArgs.push("-f", "mp4");
         ffmpegArgs.push(outputFile);
 
