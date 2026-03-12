@@ -11,7 +11,10 @@
      * - Transcodes/copies audio streams directly from input file
      *   (TrueHD/DTS → EAC3, FLAC → ALAC, others copied as-is)
      * - Reads subtitles.exports metadata for subtitle tracks
-     * - Remuxes everything to MP4 in a single ffmpeg command
+     * - Step 1: FFmpeg remuxes video + audio to MP4 (no subtitles)
+     * - Step 2: MP4Box adds subtitle tracks to the MP4
+     *   (ffmpeg's MP4 muxer uses microsecond timescale for mov_text, causing
+     *    INT32_MAX overflow on content > ~36 minutes — MP4Box handles this correctly)
      */
 
     const fs = require("fs");
@@ -22,90 +25,6 @@
     function log(jobLog, msg) {
         jobLog(msg);
         console.log(msg);
-    }
-
-    // Maximum gap (in seconds) allowed between subtitle entries in an SRT file.
-    // The MP4 muxer uses microsecond precision (1/1000000) for mov_text tracks.
-    // Gaps longer than ~35.8 minutes exceed INT32_MAX microseconds, causing
-    // "Packet duration is out of range" errors. We use 30 minutes as a safe limit.
-    const MAX_SRT_GAP_SECONDS = 30 * 60;
-
-    function parseSrtTime(str) {
-        const m = str.trim().match(/^(\d+):(\d+):(\d+)[,.](\d+)$/);
-        if (!m) return 0;
-        return parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseInt(m[3]) + parseInt(m[4]) / 1000;
-    }
-
-    function formatSrtTime(seconds) {
-        const h = Math.floor(seconds / 3600);
-        const m = Math.floor((seconds % 3600) / 60);
-        const s = Math.floor(seconds % 60);
-        const ms = Math.round((seconds % 1) * 1000);
-        return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")},${String(ms).padStart(3, "0")}`;
-    }
-
-    /**
-     * Split any gaps in an SRT file that exceed MAX_SRT_GAP_SECONDS by inserting
-     * invisible filler entries. This prevents the MP4 muxer from creating mov_text
-     * packets with durations that overflow INT32_MAX at microsecond precision.
-     * Returns the path to use for ffmpeg input — either the original (if no fix
-     * needed) or a new temp file with gaps split (to avoid EACCES on Docker-
-     * created files we cannot modify in-place).
-     */
-    function splitLongSrtGaps(filePath, jobLog) {
-        const content = fs.readFileSync(filePath, "utf-8");
-        const blocks = content.trim().split(/\r?\n\r?\n/);
-        const entries = [];
-        for (const block of blocks) {
-            const lines = block.trim().split(/\r?\n/);
-            if (lines.length < 2) continue;
-            const timeMatch = lines[1].match(/^(.+?)\s*-->\s*(.+?)$/);
-            if (!timeMatch) continue;
-            entries.push({
-                start: parseSrtTime(timeMatch[1]),
-                end: parseSrtTime(timeMatch[2]),
-                text: lines.slice(2).join("\n"),
-            });
-        }
-
-        if (entries.length === 0) return filePath;
-
-        let needsFix = false;
-        // Check gap before first entry (from time 0)
-        if (entries[0].start > MAX_SRT_GAP_SECONDS) needsFix = true;
-        for (let i = 1; i < entries.length && !needsFix; i++) {
-            if (entries[i].start - entries[i - 1].end > MAX_SRT_GAP_SECONDS) {
-                needsFix = true;
-            }
-        }
-        if (!needsFix) return filePath;
-
-        const newEntries = [];
-        for (let i = 0; i < entries.length; i++) {
-            const gapStart = i === 0 ? 0 : entries[i - 1].end;
-            const gapEnd = entries[i].start;
-            if (gapEnd - gapStart > MAX_SRT_GAP_SECONDS) {
-                let t = gapStart + MAX_SRT_GAP_SECONDS;
-                while (t < gapEnd - 1) {
-                    newEntries.push({start: t, end: t + 0.001, text: ""});
-                    t += MAX_SRT_GAP_SECONDS;
-                }
-            }
-            newEntries.push(entries[i]);
-        }
-
-        const output = newEntries.map((e, idx) =>
-            `${idx + 1}\n${formatSrtTime(e.start)} --> ${formatSrtTime(e.end)}\n${e.text}`
-        ).join("\n\n") + "\n";
-
-        // Write to a temp file to avoid EACCES on Docker-created originals
-        const ext = path.extname(filePath);
-        const base = filePath.slice(0, -ext.length);
-        const outPath = `${base}_gapfix${ext}`;
-        fs.writeFileSync(outPath, output, "utf-8");
-        const added = newEntries.length - entries.length;
-        log(jobLog, `🔧 Split long subtitle gaps in: ${path.basename(filePath)} → ${path.basename(outPath)} (${added} filler(s) added)`);
-        return outPath;
     }
 
     // Resolve inputs that may be wrapped in {{{ }}} to reference args.* values
@@ -173,29 +92,35 @@
         return codecLabel ? `${prettyLang} - ${codecLabel}` : prettyLang;
     }
 
-    function runFFmpeg(ffmpegArgs, jobLog) {
+    function runProcess(cmd, cmdArgs, jobLog, label) {
         return new Promise((resolve, reject) => {
-            const cmdStr = `ffmpeg ${ffmpegArgs.join(' ')}`;
-            console.log(`📋 Command: ${cmdStr}`);
+            const cmdStr = `${cmd} ${cmdArgs.join(' ')}`;
+            console.log(`📋 ${label} Command: ${cmdStr}`);
             if (jobLog) {
-                jobLog(`📋 Command: ${cmdStr}`);
+                jobLog(`📋 ${label} Command: ${cmdStr}`);
             }
 
-            const child = spawn("ffmpeg", ffmpegArgs, {stdio: "pipe"});
+            const child = spawn(cmd, cmdArgs, {
+                stdio: "pipe",
+                env: {
+                    ...process.env,
+                    LD_LIBRARY_PATH: `/home/Tdarr/opt/gpac/usr/lib:${process.env.LD_LIBRARY_PATH || ""}`
+                }
+            });
             const stderrLines = [];
 
             child.on("error", (err) => {
-                reject(new Error(`Failed to start ffmpeg: ${err.message}`));
+                reject(new Error(`Failed to start ${label}: ${err.message}`));
             });
 
             child.stdout.on("data", (data) => {
-                console.log(`[ffmpeg] ${data.toString().trim()}`);
+                console.log(`[${label}] ${data.toString().trim()}`);
             });
 
             child.stderr.on("data", (data) => {
                 const output = data.toString().trim();
                 if (output) {
-                    console.log(`[ffmpeg] ${output}`);
+                    console.log(`[${label}] ${output}`);
                     stderrLines.push(output);
                 }
             });
@@ -204,16 +129,16 @@
                 if (code === 0) return resolve();
                 const lastLines = stderrLines.slice(-20).join('\n');
                 if (jobLog) {
-                    jobLog(`🚨 FFmpeg stderr (last 20 lines):\n${lastLines}`);
+                    jobLog(`🚨 ${label} stderr (last 20 lines):\n${lastLines}`);
                 }
-                reject(new Error(`ffmpeg exited with code ${code}\n${lastLines}`));
+                reject(new Error(`${label} exited with code ${code}\n${lastLines}`));
             });
         });
     }
 
     const details = () => ({
         name: "Build DV8.1 MP4 (FFmpeg)",
-        description: "Remux video (bit-for-bit copy), transcode/copy audio, and add subtitles into MP4 using a single ffmpeg command. Replaces the need for a separate Extract Audio Tracks step.",
+        description: "Remux video (bit-for-bit copy), transcode/copy audio into MP4 via FFmpeg, then add subtitles via MP4Box. Replaces the need for a separate Extract Audio Tracks step.",
         style: {borderColor: "green"},
         tags: "video",
         isStartPlugin: false,
@@ -317,49 +242,18 @@
         log(jobLog, `Convert TrueHD/DTS → EAC3: ${convertTruehdDtsToEac3} | Convert FLAC → ALAC: ${convertFlacToAlac}`);
 
         // =====================================================================
-        // Build ffmpeg command
+        // Step 1: FFmpeg — remux video + audio only (no subtitles)
         // =====================================================================
+        // Subtitles are added separately via MP4Box because ffmpeg's MP4 muxer
+        // uses microsecond timescale (1/1000000) for mov_text subtitle tracks,
+        // causing INT32_MAX overflow on content longer than ~36 minutes.
 
-        // Input 0: source file (video + audio)
         const ffmpegArgs = ["-y", "-fflags", "+genpts", "-i", inputPath];
 
-        // Pre-process SRT files: split any gaps > 30 min to prevent MP4 muxer overflow.
-        // Build a map of original path → fixed path for SRTs that needed splitting.
-        const srtPathMap = new Map();
-        subtitleLines.forEach((line) => {
-            const [filename] = line.split("|");
-            const filePath = path.join(subBaseDir, filename);
-            if (filePath.toLowerCase().endsWith(".srt") && fs.existsSync(filePath)) {
-                const fixedPath = splitLongSrtGaps(filePath, jobLog);
-                if (fixedPath !== filePath) {
-                    srtPathMap.set(filePath, fixedPath);
-                }
-            }
-        });
-
-        // Inputs 1..N: subtitle files from manifest
-        // Manifest format: file|index|lang|codec|delay|forced|title|hearing_impaired|visual_impaired|default|comment
-        const subtitleFilePaths = [];
-        subtitleLines.forEach((line) => {
-            const [filename, , , , delay] = line.split("|");
-            const originalPath = path.join(subBaseDir, filename);
-            const filePath = srtPathMap.get(originalPath) || originalPath;
-            const delaySeconds = parseFloat(delay || 0);
-            subtitleFilePaths.push(filePath);
-
-            // Apply delay offset to compensate for timestamp normalization during extraction
-            if (delaySeconds !== 0) {
-                ffmpegArgs.push("-itsoffset", delaySeconds.toString());
-            }
-            ffmpegArgs.push("-i", filePath);
-        });
-
-        // --- Stream mapping ---
-
-        // Map video from input file
+        // Map video
         ffmpegArgs.push("-map", "0:v:0");
 
-        // Determine audio stream mapping and per-stream codec settings
+        // Map and configure audio streams
         const audioTrackInfo = [];
         let needEac3Opts = false;
 
@@ -379,11 +273,9 @@
             let outCodec;
             let isConverted = false;
 
-            // Map this audio stream from input file
             ffmpegArgs.push("-map", `0:a:${inputIdx}`);
 
             if ((codec === "truehd" || codec === "dts") && convertTruehdDtsToEac3) {
-                // Transcode to EAC3
                 outCodec = "eac3";
                 isConverted = true;
                 needEac3Opts = true;
@@ -391,12 +283,10 @@
                 ffmpegArgs.push(`-b:a:${outIdx}`, "1024k");
                 ffmpegArgs.push(`-filter:a:${outIdx}`, "aresample=async=1:first_pts=0");
             } else if (codec === "flac" && convertFlacToAlac) {
-                // Transcode FLAC to ALAC
                 outCodec = "alac";
                 isConverted = true;
                 ffmpegArgs.push(`-c:a:${outIdx}`, "alac");
             } else {
-                // Copy as-is (eac3, ac3, aac, flac, or truehd/dts when convert is off)
                 outCodec = codec;
                 ffmpegArgs.push(`-c:a:${outIdx}`, "copy");
             }
@@ -404,19 +294,14 @@
             audioTrackInfo.push({inputIdx, outIdx, codec, outCodec, isConverted, lang, title});
         }
 
-        // Map subtitle files (input indices start at 1 since input 0 is the source file)
-        subtitleLines.forEach((_, idx) => {
-            ffmpegArgs.push("-map", `${idx + 1}:s:0`);
-        });
-
-        // --- Codec settings ---
+        // No subtitle mapping — subtitles will be added by MP4Box in step 2
 
         // Video: bit-for-bit copy with hvc1 tag for HEVC in MP4
         ffmpegArgs.push("-c:v", "copy");
         ffmpegArgs.push("-tag:v", "hvc1");
         ffmpegArgs.push("-strict", "unofficial");
 
-        // Global EAC3 encoder options (only relevant if any stream is being transcoded to EAC3)
+        // Global EAC3 encoder options
         if (needEac3Opts) {
             ffmpegArgs.push(
                 "-dialnorm", "-27",
@@ -430,13 +315,6 @@
                 "-loro_surmixlev", "0.707"
             );
         }
-
-        // Subtitles: convert to mov_text for MP4
-        if (subtitleLines.length > 0) {
-            ffmpegArgs.push("-c:s", "mov_text");
-        }
-
-        // --- Metadata ---
 
         // Audio track metadata
         for (const track of audioTrackInfo) {
@@ -455,54 +333,68 @@
             log(jobLog, `🎧 Audio ${outIdx}: a:${track.inputIdx} ${codec} → ${outCodec} | lang=${lang} | converted=${isConverted}`);
         }
 
-        // Subtitle track metadata
-        // Manifest format: file|index|lang|codec|delay|forced|title|hearing_impaired|visual_impaired|default|comment
-        subtitleLines.forEach((line, idx) => {
-            const [filename, , lang, codec, delay, forced, title, hearingImpaired, visualImpaired, isDefault, isComment] = line.split("|");
-
-            if (lang) {
-                ffmpegArgs.push(`-metadata:s:s:${idx}`, `language=${lang}`);
-            }
-
-            const codecLower = (codec || "").toLowerCase();
-            const isOcr = codecLower.includes("pgs") || codecLower.includes("hdmv");
-            const baseTitle = title || (lang ? lang.toUpperCase() : "Subtitle");
-            const convMark = isOcr && !/\bocr\b/i.test(baseTitle) ? " (OCR)" : "";
-            const forcedMark = forced === "1" && !/\bforced\b/i.test(baseTitle) ? " (Forced)" : "";
-            const trackTitle = `${baseTitle}${forcedMark}${convMark}`;
-
-            ffmpegArgs.push(`-metadata:s:s:${idx}`, `title=${trackTitle}`);
-            ffmpegArgs.push(`-metadata:s:s:${idx}`, `handler_name=${trackTitle}`);
-
-            const dispositions = [];
-            if (forced === "1") dispositions.push("forced");
-            if (hearingImpaired === "1") dispositions.push("hearing_impaired");
-            if (visualImpaired === "1") dispositions.push("visual_impaired");
-            if (isDefault === "1") dispositions.push("default");
-            if (isComment === "1") dispositions.push("comment");
-            if (dispositions.length > 0) {
-                ffmpegArgs.push(`-disposition:s:${idx}`, dispositions.join("+"));
-            }
-
-            log(jobLog, `💬 Subtitle ${idx}: ${filename} | lang=${lang} | OCR=${isOcr} | forced=${forced === "1"} | HI=${hearingImpaired === "1"} | VI=${visualImpaired === "1"} | default=${isDefault === "1"} | comment=${isComment === "1"}`);
-        });
-
-        // --- Output ---
-        // Disable interleave delta check to prevent "Packet duration is out of range"
-        // errors. Sparse subtitle tracks cause large gaps between subtitle and
-        // audio/video packets, exceeding the MP4 muxer's INT32_MAX µs limit.
-        ffmpegArgs.push("-max_interleave_delta", "0");
         ffmpegArgs.push("-f", "mp4");
         ffmpegArgs.push(outputFile);
 
-        // =====================================================================
-        // Run ffmpeg
-        // =====================================================================
         try {
-            await runFFmpeg(ffmpegArgs, jobLog);
+            await runProcess("ffmpeg", ffmpegArgs, jobLog, "ffmpeg");
         } catch (err) {
             console.error("🚨 FFmpeg remux FAILED:", err.message);
             throw err;
+        }
+
+        log(jobLog, `✅ FFmpeg step complete — video + audio muxed to: ${outputFile}`);
+
+        // =====================================================================
+        // Step 2: MP4Box — add subtitle tracks
+        // =====================================================================
+        // MP4Box properly handles subtitle timescales, avoiding the INT32_MAX
+        // overflow that plagues ffmpeg's mov_text encoder on long content.
+
+        const subtitleFilePaths = [];
+
+        if (subtitleLines.length > 0) {
+            const mp4boxPath = (args.variables?.mp4boxBin || "").trim() || "/home/Tdarr/opt/gpac/usr/bin/MP4Box";
+
+            log(jobLog, `📎 Adding ${subtitleLines.length} subtitle track(s) via MP4Box...`);
+
+            // Manifest format: file|index|lang|codec|delay|forced|title|hearing_impaired|visual_impaired|default|comment
+            for (const line of subtitleLines) {
+                const [filename, , lang, codec, delay, forced, title, hearingImpaired, visualImpaired, isDefault, isComment] = line.split("|");
+                const srtPath = path.join(subBaseDir, filename);
+                subtitleFilePaths.push(srtPath);
+
+                const langFlag = lang ? `:lang=${lang}` : "";
+                const forcedFlag = forced === "1" ? ":forced" : "";
+
+                const delaySeconds = parseFloat(delay || 0);
+                const delayMs = Math.round(delaySeconds * 1000);
+                const delayFlag = delayMs !== 0 ? `:delay=${delayMs}` : "";
+
+                const codecLower = (codec || "").toLowerCase();
+                const isOcr = codecLower.includes("pgs") || codecLower.includes("hdmv");
+                const baseTitle = title || (lang ? lang.toUpperCase() : "Subtitle");
+                const convMark = isOcr && !/\bocr\b/i.test(baseTitle) ? " (OCR)" : "";
+                const forcedMark = forced === "1" && !/\bforced\b/i.test(baseTitle) ? " (Forced)" : "";
+                const hiMark = hearingImpaired === "1" && !/\bsdh\b/i.test(baseTitle) ? " [SDH]" : "";
+                const viMark = visualImpaired === "1" && !/\bad\b/i.test(baseTitle) ? " [AD]" : "";
+                const commentMark = isComment === "1" && !/\bcommentary\b/i.test(baseTitle) ? " [Commentary]" : "";
+                const trackTitle = `${baseTitle}${forcedMark}${hiMark}${viMark}${commentMark}${convMark}`;
+                const nameFlag = `:name=${trackTitle}`;
+
+                const mp4Args = ["-add", `${srtPath}${langFlag}${forcedFlag}${delayFlag}${nameFlag}`, outputFile];
+
+                log(jobLog, `💬 Subtitle: ${filename} | lang=${lang} | OCR=${isOcr} | forced=${forced === "1"} | HI=${hearingImpaired === "1"} | VI=${visualImpaired === "1"} | default=${isDefault === "1"} | comment=${isComment === "1"}`);
+
+                try {
+                    await runProcess(mp4boxPath, mp4Args, jobLog, "MP4Box");
+                } catch (err) {
+                    log(jobLog, `⚠️ MP4Box subtitle add failed for ${filename}: ${err.message}`);
+                    // Continue with remaining subtitles — don't fail the entire remux
+                }
+            }
+
+            log(jobLog, `✅ MP4Box step complete — subtitles added`);
         }
 
         log(jobLog, `🎉 SUCCESS — MP4 Created: ${outputFile}`);
