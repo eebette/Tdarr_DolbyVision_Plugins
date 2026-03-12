@@ -27,6 +27,70 @@
         console.log(msg);
     }
 
+    function parseSrtTime(str) {
+        const m = str.trim().match(/^(\d+):(\d+):(\d+)[,.](\d+)$/);
+        if (!m) return 0;
+        return parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseInt(m[3]) + parseInt(m[4]) / 1000;
+    }
+
+    function formatSrtTime(seconds) {
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = Math.floor(seconds % 60);
+        const ms = Math.round((seconds % 1) * 1000);
+        return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")},${String(ms).padStart(3, "0")}`;
+    }
+
+    /**
+     * Preprocess an SRT file for MP4Box compatibility: insert an explicit blank
+     * entry after each subtitle so that MP4Box generates empty tx3g samples that
+     * clear the text from screen. Without this, some players (e.g. Jellyfin)
+     * keep the previous subtitle visible until the next one appears.
+     *
+     * Writes to a new file to avoid EACCES on Docker-created originals.
+     * Returns the path to the preprocessed file.
+     */
+    function preprocessSrtForMp4box(filePath, jobLog) {
+        const content = fs.readFileSync(filePath, "utf-8");
+        const blocks = content.trim().split(/\r?\n\r?\n/);
+        const entries = [];
+        for (const block of blocks) {
+            const lines = block.trim().split(/\r?\n/);
+            if (lines.length < 2) continue;
+            const timeMatch = lines[1].match(/^(.+?)\s*-->\s*(.+?)$/);
+            if (!timeMatch) continue;
+            entries.push({
+                start: parseSrtTime(timeMatch[1]),
+                end: parseSrtTime(timeMatch[2]),
+                text: lines.slice(2).join("\n"),
+            });
+        }
+
+        if (entries.length === 0) return filePath;
+
+        // Build new SRT with blank clear entries after each subtitle
+        const newEntries = [];
+        for (let i = 0; i < entries.length; i++) {
+            newEntries.push(entries[i]);
+            const clearStart = entries[i].end;
+            // Don't insert a clear entry if the next subtitle starts immediately
+            const nextStart = i + 1 < entries.length ? entries[i + 1].start : clearStart + 0.1;
+            if (nextStart - clearStart > 0.01) {
+                newEntries.push({start: clearStart, end: clearStart + 0.001, text: ""});
+            }
+        }
+
+        const output = newEntries.map((e, idx) =>
+            `${idx + 1}\n${formatSrtTime(e.start)} --> ${formatSrtTime(e.end)}\n${e.text}`
+        ).join("\n\n") + "\n";
+
+        const ext = path.extname(filePath);
+        const base = filePath.slice(0, -ext.length);
+        const outPath = `${base}_mp4box${ext}`;
+        fs.writeFileSync(outPath, output, "utf-8");
+        return outPath;
+    }
+
     // Resolve inputs that may be wrapped in {{{ }}} to reference args.* values
     function resolveInput(value, args) {
         if (typeof value !== "string") return value;
@@ -352,24 +416,51 @@
         // overflow that plagues ffmpeg's mov_text encoder on long content.
 
         const subtitleFilePaths = [];
+        const tempSrtFiles = [];
 
         if (subtitleLines.length > 0) {
             const mp4boxPath = (args.variables?.mp4boxBin || "").trim() || "/home/Tdarr/opt/gpac/usr/bin/MP4Box";
+
+            // Compute video start_time offset. ffmpeg normalizes the output MP4
+            // timeline to start at ~0, but PgsToSrtPlus extracts SRT timestamps
+            // on the original MKV's absolute timeline. If the MKV video stream
+            // had start_time > 0, all subtitles would appear early by that amount.
+            const videoStream = streams.find((s) => s.codec_type === "video");
+            const videoStartTime = parseFloat(videoStream?.start_time || 0);
+            if (videoStartTime !== 0) {
+                log(jobLog, `ℹ Video start_time offset: ${videoStartTime}s (will compensate subtitle timing)`);
+            }
 
             log(jobLog, `📎 Adding ${subtitleLines.length} subtitle track(s) via MP4Box...`);
 
             // Manifest format: file|index|lang|codec|delay|forced|title|hearing_impaired|visual_impaired|default|comment
             for (const line of subtitleLines) {
                 const [filename, , lang, codec, delay, forced, title, hearingImpaired, visualImpaired, isDefault, isComment] = line.split("|");
-                const srtPath = path.join(subBaseDir, filename);
-                subtitleFilePaths.push(srtPath);
+                const originalSrtPath = path.join(subBaseDir, filename);
+                subtitleFilePaths.push(originalSrtPath);
+
+                // Preprocess SRT: insert blank entries after each subtitle so MP4Box
+                // generates explicit empty tx3g samples that clear text from screen.
+                let srtPath = originalSrtPath;
+                if (originalSrtPath.toLowerCase().endsWith(".srt") && fs.existsSync(originalSrtPath)) {
+                    const preprocessed = preprocessSrtForMp4box(originalSrtPath, jobLog);
+                    if (preprocessed !== originalSrtPath) {
+                        srtPath = preprocessed;
+                        tempSrtFiles.push(preprocessed);
+                    }
+                }
 
                 const langFlag = lang ? `:lang=${lang}` : "";
                 const forcedFlag = forced === "1" ? ":forced" : "";
 
-                const delaySeconds = parseFloat(delay || 0);
-                const delayMs = Math.round(delaySeconds * 1000);
-                const delayFlag = delayMs !== 0 ? `:delay=${delayMs}` : "";
+                // The manifest "delay" field is the stream's start_time from ffprobe
+                // (the PTS of its first packet), NOT a timing offset. PgsToSrtPlus
+                // produces absolute timestamps matching the MKV timeline, so we only
+                // need to compensate for ffmpeg's video start_time normalization.
+                const subStartTime = parseFloat(delay || 0);
+                const effectiveDelaySec = subStartTime - videoStartTime;
+                const effectiveDelayMs = Math.round(effectiveDelaySec * 1000);
+                const delayFlag = effectiveDelayMs !== 0 ? `:delay=${effectiveDelayMs}` : "";
 
                 const codecLower = (codec || "").toLowerCase();
                 const isOcr = codecLower.includes("pgs") || codecLower.includes("hdmv");
@@ -384,7 +475,8 @@
 
                 const mp4Args = ["-add", `${srtPath}${langFlag}${forcedFlag}${delayFlag}${nameFlag}`, outputFile];
 
-                log(jobLog, `💬 Subtitle: ${filename} | lang=${lang} | OCR=${isOcr} | forced=${forced === "1"} | HI=${hearingImpaired === "1"} | VI=${visualImpaired === "1"} | default=${isDefault === "1"} | comment=${isComment === "1"}`);
+                const delayInfo = effectiveDelayMs !== 0 ? ` | delay=${effectiveDelaySec.toFixed(3)}s (${effectiveDelayMs}ms)` : "";
+                log(jobLog, `💬 Subtitle: ${filename} | lang=${lang} | OCR=${isOcr} | forced=${forced === "1"} | HI=${hearingImpaired === "1"} | VI=${visualImpaired === "1"} | default=${isDefault === "1"} | comment=${isComment === "1"}${delayInfo}`);
 
                 try {
                     await runProcess(mp4boxPath, mp4Args, jobLog, "MP4Box");
@@ -402,6 +494,15 @@
         // =====================================================================
         // Cleanup subtitle source files
         // =====================================================================
+        // Always clean up preprocessed temp SRT files
+        for (const tmpFile of tempSrtFiles) {
+            try {
+                if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
+            } catch (err) {
+                // Best-effort cleanup
+            }
+        }
+
         if (deleteSources) {
             log(jobLog, "🧹 Deleting subtitle source files...");
 
