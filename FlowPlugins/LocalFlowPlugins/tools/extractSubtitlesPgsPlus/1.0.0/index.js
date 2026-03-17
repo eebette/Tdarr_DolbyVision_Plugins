@@ -199,27 +199,12 @@
                 label: "Prefer Text Subtitle as Default",
                 name: "preferTextDefault",
                 tooltip:
-                    "When enabled, if the default subtitle is image-based (PGS), transfer the default flag " +
-                    "to the first non-image-based, non-commentary text subtitle of the same language. " +
-                    "If no suitable text subtitle exists, the default remains unchanged. " +
-                    "When a Default Subtitle Language is set, language match is prioritized over format: " +
-                    "an OCR subtitle in the preferred language is preferred over a text subtitle in another language.",
+                    "When enabled, if the original default subtitle is image-based (PGS) and a same-language, " +
+                    "non-forced, non-commentary text subtitle exists, the default flag is transferred to the " +
+                    "text subtitle. When disabled, the default flag always stays on the original stream.",
                 inputType: "boolean",
-                defaultValue: "false",
+                defaultValue: "true",
                 inputUI: { type: "switch" },
-            },
-            {
-                label: "Default Subtitle Language",
-                name: "defaultSubtitleLanguage",
-                tooltip:
-                    "ISO 639-2 language code (e.g. eng, jpn) for the preferred default subtitle language. " +
-                    "When set and 'Prefer Text Subtitle as Default' is enabled, language match takes priority " +
-                    "over OCR/text format. For example, if set to 'eng' and only OCR English subtitles exist " +
-                    "alongside text foreign-language subtitles, the English OCR subtitle will be set as default. " +
-                    "Leave empty to use the original format-priority behavior.",
-                inputType: "string",
-                defaultValue: "",
-                inputUI: { type: "text" },
             },
             {
                 label: "Output Directory",
@@ -263,8 +248,7 @@
         const ollamaModel = (resolveInput(args.inputs.ollamaModel, args) || "").toString().trim();
         const skipPgsWhenTextExists = String(resolveInput(args.inputs.skipPgsWhenTextExists, args)) !== "false";
         const extractAllPgs = String(resolveInput(args.inputs.extractAllPgs, args)) === "true";
-        const preferTextDefault = String(resolveInput(args.inputs.preferTextDefault, args)) === "true";
-        const defaultSubtitleLanguage = (resolveInput(args.inputs.defaultSubtitleLanguage, args) || "").toString().trim().toLowerCase();
+        const preferTextDefault = String(resolveInput(args.inputs.preferTextDefault, args)) !== "false";
         const preserveMetadata = String(resolveInput(args.inputs.preserveMetadata, args)) !== "false";
         const configuredOutputDir = (resolveInput(args.inputs.outputDirectory, args) || "").toString().trim();
         const workDir = configuredOutputDir.length > 0 ? configuredOutputDir : args.workDir;
@@ -496,81 +480,22 @@
             }
         }
 
-        // --- Transfer default from image-based to text subtitles if option is enabled ---
-        if (preferTextDefault) {
-            // Find the best candidate for default subtitle.
-            // When defaultSubtitleLanguage is set, priority order:
-            //   1. Text subtitle in preferred language
-            //   2. Any subtitle (including OCR) in preferred language
-            //   3. Text subtitle in the current default's language
-            //   4. Text subtitle in any language
-            // When defaultSubtitleLanguage is NOT set (original behavior):
-            //   1. Text subtitle in the current default's language
-            //   2. Text subtitle in any language
-            const findBestCandidate = (currentDefaultLang) => {
-                if (defaultSubtitleLanguage) {
-                    // 1. Text subtitle in preferred language
-                    let idx = manifestEntries.findIndex(e =>
-                        !e.isImageBased && !e.isComment && e.lang === defaultSubtitleLanguage
-                    );
-                    if (idx !== -1) return idx;
-
-                    // 2. Any subtitle (including OCR) in preferred language
-                    idx = manifestEntries.findIndex(e =>
-                        !e.isComment && e.lang === defaultSubtitleLanguage
-                    );
-                    if (idx !== -1) return idx;
-                }
-
-                // 3. Text subtitle in the current default's language
-                let idx = manifestEntries.findIndex(e =>
-                    !e.isImageBased && !e.isComment && e.lang === currentDefaultLang
-                );
-                if (idx !== -1) return idx;
-
-                // 4. Text subtitle in any language
-                idx = manifestEntries.findIndex(e =>
-                    !e.isImageBased && !e.isComment
-                );
-                return idx;
-            };
-
-            const defaultImageIdx = manifestEntries.findIndex(e => e.isDefault && e.isImageBased);
-            const anyExplicitDefault = manifestEntries.some(e => e.isDefault);
-            const firstIsImageBased = manifestEntries.length > 0 && manifestEntries[0].isImageBased;
-
-            if (defaultImageIdx !== -1) {
-                const candidateIdx = findBestCandidate(manifestEntries[defaultImageIdx].lang);
-                if (candidateIdx !== -1) {
-                    // Only transfer if the candidate is different from the current default
-                    if (candidateIdx !== defaultImageIdx) {
-                        manifestEntries.forEach(e => {
-                            if (e.isDefault && e.isImageBased) {
-                                log(jobLog, `🔄 Removing default from OCR subtitle: ${e.file}`);
-                                e.isDefault = 0;
-                            }
-                        });
-                        manifestEntries[candidateIdx].isDefault = 1;
-                        log(jobLog, `🔄 Setting default on subtitle: ${manifestEntries[candidateIdx].file}`);
-                    } else {
-                        log(jobLog, `ℹ Best candidate is already the default — no change needed`);
-                    }
-                } else {
-                    log(jobLog, `ℹ No eligible subtitle found to transfer default — keeping OCR subtitle as default`);
-                }
-            } else if (!anyExplicitDefault && firstIsImageBased) {
-                const candidateIdx = findBestCandidate(manifestEntries[0].lang);
-                if (candidateIdx !== -1) {
-                    manifestEntries[candidateIdx].isDefault = 1;
-                    log(jobLog, `🔄 Setting default on subtitle (first track is OCR, no explicit default): ${manifestEntries[candidateIdx].file}`);
-                }
-            } else if (!anyExplicitDefault && defaultSubtitleLanguage) {
-                // No explicit default and first is not image-based, but we have a preferred language
-                const candidateIdx = findBestCandidate("");
-                if (candidateIdx !== -1) {
-                    manifestEntries[candidateIdx].isDefault = 1;
-                    log(jobLog, `🔄 Setting default on subtitle (preferred language ${defaultSubtitleLanguage}): ${manifestEntries[candidateIdx].file}`);
-                }
+        // --- If the default subtitle is image-based and a same-language text alternative
+        //     exists, transfer the default to the text subtitle. Otherwise keep as-is. ---
+        if (!preferTextDefault) {
+            log(jobLog, `ℹ Prefer Text Default is disabled — keeping default flags on original streams`);
+        }
+        const defaultImageEntries = preferTextDefault
+            ? manifestEntries.filter(e => e.isDefault && e.isImageBased)
+            : [];
+        for (const defaultEntry of defaultImageEntries) {
+            const textAlt = manifestEntries.find(e =>
+                !e.isImageBased && !e.isComment && !e.forced && e.lang === defaultEntry.lang
+            );
+            if (textAlt) {
+                log(jobLog, `🔄 Transferring default from OCR subtitle (${defaultEntry.file}) to text subtitle (${textAlt.file})`);
+                defaultEntry.isDefault = 0;
+                textAlt.isDefault = 1;
             }
         }
 
