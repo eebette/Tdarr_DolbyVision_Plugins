@@ -296,6 +296,12 @@
 
         log(jobLog, `Total subtitle streams: ${allSubStreams.length} (${allPgsStreams.length} PGS, ${allSubStreams.length - allPgsStreams.length} text)`);
 
+        // Debug: log disposition flags from ffprobe for all subtitle streams
+        for (const s of allSubStreams) {
+            const d = s.disposition || {};
+            log(jobLog, `  [ffprobe] idx=${s.index} codec=${s.codec_name} lang=${(s.tags?.language || "und")} default=${d.default} forced=${d.forced} comment=${d.comment} hi=${d.hearing_impaired} title="${s.tags?.title || ""}"`);
+        }
+
         const exportsFile = path.join(workDir, `${baseName}_subtitles.exports`);
         fs.writeFileSync(exportsFile, ""); // clear or create
         const manifestEntries = [];
