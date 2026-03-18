@@ -286,6 +286,32 @@
             return { outputFileObj: args.inputFileObj, outputNumber: 1, variables: args.variables };
         }
 
+        // --- Build original disposition map ---
+        // Tdarr's working copy may have artificial default flags set by ffmpeg during
+        // intermediate remuxing (ffmpeg sets default=1 on the first stream of each type).
+        // Use the original library file's disposition flags instead, matched by stream index.
+        const originalSubStreams = (args.originalLibraryFile?.ffProbeData?.streams || [])
+            .filter(s => s.codec_type === "subtitle");
+        const originalDispositionMap = new Map();
+        for (const s of originalSubStreams) {
+            originalDispositionMap.set(s.index, s.disposition || {});
+        }
+        const hasOriginalData = originalDispositionMap.size > 0;
+        if (hasOriginalData) {
+            log(jobLog, `ℹ Using disposition flags from original file: ${args.originalLibraryFile.file}`);
+        } else {
+            log(jobLog, `⚠ Original library file disposition data not available — using working copy flags`);
+        }
+
+        // Helper: get the authoritative default flag for a stream
+        const getOriginalDefault = (stream) => {
+            if (hasOriginalData) {
+                const origDisp = originalDispositionMap.get(stream.index);
+                return origDisp ? (origDisp.default ? 1 : 0) : 0;
+            }
+            return stream.disposition?.default ? 1 : 0;
+        };
+
         // Build PGS-relative index mapping (across all languages)
         // PgsToSrtPlus's --track flag uses 0-based index within all PGS tracks in the file
         const allPgsStreams = allSubStreams.filter(s => isPgs(s.codec_name));
@@ -296,10 +322,11 @@
 
         log(jobLog, `Total subtitle streams: ${allSubStreams.length} (${allPgsStreams.length} PGS, ${allSubStreams.length - allPgsStreams.length} text)`);
 
-        // Debug: log disposition flags from ffprobe for all subtitle streams
+        // Debug: log disposition flags for all subtitle streams
         for (const s of allSubStreams) {
             const d = s.disposition || {};
-            log(jobLog, `  [ffprobe] idx=${s.index} codec=${s.codec_name} lang=${(s.tags?.language || "und")} default=${d.default} forced=${d.forced} comment=${d.comment} hi=${d.hearing_impaired} title="${s.tags?.title || ""}"`);
+            const origDefault = hasOriginalData ? (originalDispositionMap.get(s.index)?.default || 0) : "N/A";
+            log(jobLog, `  [ffprobe] idx=${s.index} codec=${s.codec_name} lang=${(s.tags?.language || "und")} default=${d.default} (original=${origDefault}) forced=${d.forced} comment=${d.comment} hi=${d.hearing_impaired} title="${s.tags?.title || ""}"`);
         }
 
         const exportsFile = path.join(workDir, `${baseName}_subtitles.exports`);
@@ -362,7 +389,7 @@
                     title: preserveMetadata ? (title || "") : "",
                     hearingImpaired: s.disposition?.hearing_impaired ? 1 : 0,
                     visualImpaired: s.disposition?.visual_impaired ? 1 : 0,
-                    isDefault: s.disposition?.default ? 1 : 0,
+                    isDefault: getOriginalDefault(s),
                     isComment: s.disposition?.comment ? 1 : 0,
                     isImageBased: false,
                 });
@@ -479,7 +506,7 @@
                     title: preserveMetadata ? (title || "") : "",
                     hearingImpaired: s.disposition?.hearing_impaired ? 1 : 0,
                     visualImpaired: s.disposition?.visual_impaired ? 1 : 0,
-                    isDefault: s.disposition?.default ? 1 : 0,
+                    isDefault: getOriginalDefault(s),
                     isComment: s.disposition?.comment ? 1 : 0,
                     isImageBased: true,
                 });
