@@ -278,6 +278,7 @@
             const srtPath = path.join(subBaseDir, filename);
             const langFlag = lang ? `:lang=${lang}` : "";
             const forcedFlag = forced === "1" ? ":forced" : "";
+            const disableFlag = isDefault !== "1" ? ":disable" : "";
 
             // Convert delay from seconds to milliseconds for MP4Box
             const delaySeconds = parseFloat(delay || 0);
@@ -294,7 +295,7 @@
             const commentMark = isComment === "1" && !/\bcommentary\b/i.test(baseTitle) ? " [Commentary]" : "";
             const name = formatNameFlag(`${baseTitle}${forcedMark}${hiMark}${viMark}${commentMark}`, convMark);
 
-            mp4Args.push("-add", `${srtPath}${langFlag}${forcedFlag}${delayFlag}${name}`);
+            mp4Args.push("-add", `${srtPath}${langFlag}${forcedFlag}${disableFlag}${delayFlag}${name}`);
             const delayInfo = delayMs !== 0 ? ` | delay=${delaySeconds.toFixed(3)}s (${delayMs}ms)` : "";
             log(jobLog, `💬 Subtitle: ${filename} | lang=${lang} | OCR=${isOcr} | forced=${forced === "1"} | HI=${hearingImpaired === "1"} | VI=${visualImpaired === "1"} | default=${isDefault === "1"} | comment=${isComment === "1"}${delayInfo}`);
         });
