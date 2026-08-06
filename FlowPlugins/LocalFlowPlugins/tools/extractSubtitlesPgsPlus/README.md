@@ -14,7 +14,7 @@
 
 ## Dependency: PgsToSrtPlus (required for OCR)
 
-This plugin **strictly depends on [PgsToSrtPlus](https://github.com/eebette/PgsToSrtPlus/tree/master)** for PGS OCR. It is not installed by the Install DV Tools plugin — you must provide a working run command yourself. Without it, only text subtitles are extracted.
+This plugin **strictly depends on [PgsToSrtPlus](https://github.com/eebette/PgsToSrtPlus/tree/master)** for PGS OCR. It is not installed by the Install DV Tools plugin — you must provide a working run command yourself. Without it, only text subtitles are extracted. PgsToSrtPlus also requires a reachable [Ollama](https://ollama.com) API endpoint for its VLM-based OCR (`Ollama URL` / `Ollama Model` inputs).
 
 The simplest way to run it is the Docker image (`ebette1/pgs-to-srt-plus`). When Tdarr itself runs in Docker, that means Docker-in-Docker: the Tdarr container needs a `docker` CLI and a daemon to talk to, and the media paths must resolve identically inside the OCR container.
 

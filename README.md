@@ -70,7 +70,7 @@ The `convertHevc` plugin supports the following dovi_tool modes:
 
 ### PgsToSrtPlus dependency (extractSubtitlesPgsPlus)
 
-The `extractSubtitlesPgsPlus` plugin **strictly depends on [PgsToSrtPlus](https://github.com/eebette/PgsToSrtPlus/tree/master)** for PGS OCR. It is *not* installed by `installDvTools` — you supply a run command via the plugin's `PgsToSrtPlus Run Command` input (typically the `ebette1/pgs-to-srt-plus` Docker image). If the command is empty, the plugin still extracts text subtitles but skips PGS OCR entirely.
+The `extractSubtitlesPgsPlus` plugin **strictly depends on [PgsToSrtPlus](https://github.com/eebette/PgsToSrtPlus/tree/master)** for PGS OCR. It is *not* installed by `installDvTools` — you supply a run command via the plugin's `PgsToSrtPlus Run Command` input (typically the `ebette1/pgs-to-srt-plus` Docker image). If the command is empty, the plugin still extracts text subtitles but skips PGS OCR entirely. PgsToSrtPlus also requires a reachable [Ollama](https://ollama.com) API endpoint for its VLM-based OCR — set it via the plugin's `Ollama URL` and `Ollama Model` inputs.
 
 Running the Docker image from inside a Dockerized Tdarr requires Docker-in-Docker: a `docker:dind` sidecar next to the Tdarr container, a static `docker` CLI bind-mounted into Tdarr, `DOCKER_HOST`/TLS environment pointing at the dind daemon, and the media volume mounted at the **same path** in both containers so the file paths the plugin passes resolve inside the OCR container. A known-working Compose example and full explanation live in the plugin's [README](FlowPlugins/LocalFlowPlugins/tools/extractSubtitlesPgsPlus/README.md).
 
