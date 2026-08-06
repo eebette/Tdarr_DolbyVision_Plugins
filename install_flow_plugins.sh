@@ -77,4 +77,21 @@ rsync -a \
   --exclude='*' \
   "$source_dir/" "$dest_dir/"
 
+# Remove plugins this repo used to ship under namespaces that no longer exist
+# (renamed or deprecated). Only these exact directories are touched, so any
+# unrelated local plugins the user has are left alone.
+deprecated_plugins=(
+  "LocalFlowPlugins/tools/convertHevcTo81"   # renamed to tools/convertHevc
+  "LocalFlowPlugins/tools/extractPgsSubtitles"   # replaced by tools/extractSubtitlesPgsPlus
+  "LocalFlowPlugins/video/buildDv5Mp4"   # removed; DV5 now converts to 8.1 via convertHevc mode 3
+)
+
+for plugin in "${deprecated_plugins[@]}"; do
+  plugin_dir="$dest_dir/$plugin"
+  if [[ -d "$plugin_dir" ]]; then
+    echo "Removing deprecated plugin: $plugin"
+    rm -rf "$plugin_dir"
+  fi
+done
+
 echo "Installed FlowPlugins into: $dest_dir"
