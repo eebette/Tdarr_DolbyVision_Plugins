@@ -55,7 +55,7 @@ Prereqs: `curl` or `wget`, and `tar` (standard on most distros).
 - `tools/injectRpuIntoHevc`: Injects a provided RPU file back into an HEVC stream, producing a DV-ready elementary stream for remux.
 - `tools/extractAudioTracks`: Extracts audio tracks with ffmpeg into discrete files and writes `audio.exports` metadata; optionally converts TrueHD/DTS to E-AC-3 for compatibility.
 - `tools/extractAllSubtitles`: Extracts every subtitle stream to SRT (text copied; PGS via PgsToSrt OCR) and writes `subtitles.exports` for remuxers.
-- `tools/extractSubtitlesPgsPlus`: Extracts subtitles for requested languages, preferring text codecs (via ffmpeg) and OCR-ing PGS to SRT with PgsToSrtPlus only when no non-commentary text subtitles exist for a language, writing `subtitles.exports`.
+- `tools/extractSubtitlesPgsPlus`: Extracts subtitles for requested languages, preferring text codecs (via ffmpeg) and OCR-ing PGS to SRT with PgsToSrtPlus only when no non-commentary text subtitles exist for a language, writing `subtitles.exports`. **Strictly depends on [PgsToSrtPlus](https://github.com/eebette/PgsToSrtPlus/tree/master) for OCR** — see [PgsToSrtPlus dependency](#pgstosrtplus-dependency-extractsubtitlespgsplus).
 - `tools/fixEnglishSubtitles`: Cleans common English OCR errors in SRT files listed in `subtitles.exports` with conservative (but common) character/word fixes.
 - `tools/cleanupDvCache`: Cleans up temporary Dolby Vision processing files from the cache directory.
 
@@ -67,6 +67,12 @@ The `convertHevc` plugin supports the following dovi_tool modes:
 - **Mode 3**: Convert profile 5 to 8.1
 - **Mode 4**: Convert to profile 8.4
 - **Mode 5**: Convert to profile 8.1 preserving mapping (legacy mode 2)
+
+### PgsToSrtPlus dependency (extractSubtitlesPgsPlus)
+
+The `extractSubtitlesPgsPlus` plugin **strictly depends on [PgsToSrtPlus](https://github.com/eebette/PgsToSrtPlus/tree/master)** for PGS OCR. It is *not* installed by `installDvTools` — you supply a run command via the plugin's `PgsToSrtPlus Run Command` input (typically the `ebette1/pgs-to-srt-plus` Docker image). If the command is empty, the plugin still extracts text subtitles but skips PGS OCR entirely.
+
+Running the Docker image from inside a Dockerized Tdarr requires Docker-in-Docker: a `docker:dind` sidecar next to the Tdarr container, a static `docker` CLI bind-mounted into Tdarr, `DOCKER_HOST`/TLS environment pointing at the dind daemon, and the media volume mounted at the **same path** in both containers so the file paths the plugin passes resolve inside the OCR container. A known-working Compose example and full explanation live in the plugin's [README](FlowPlugins/LocalFlowPlugins/tools/extractSubtitlesPgsPlus/README.md).
 
 ## Typical flow examples 🔄
 - **DV7/DV8.x conversion flow**: DV7/DV8.x source → `checkDolbyVision7` → `extractHevc` + `extractRpu` → `convertHevc` (mode 2, with --discard for DV7) → `injectRpuIntoHevc` → `extractAudioTracks` + `extractSubtitlesPgsPlus` → `buildDv81Mp4`.
