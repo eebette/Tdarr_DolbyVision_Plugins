@@ -232,9 +232,9 @@
             rpuFilePath = "";
         }
 
-        const audioLines = fs.readFileSync(audioExportsFile, "utf-8").trim().split("\n");
+        const audioLines = fs.readFileSync(audioExportsFile, "utf-8").trim().split("\n").filter(Boolean);
         const subtitleLines = subtitleExists
-            ? fs.readFileSync(subtitleExportsFile, "utf-8").trim().split("\n")
+            ? fs.readFileSync(subtitleExportsFile, "utf-8").trim().split("\n").filter(Boolean)
             : [];
         const deleteSources = String(resolveInput(args.inputs.deleteSourcesAfterRemux, args)) === "true";
 
