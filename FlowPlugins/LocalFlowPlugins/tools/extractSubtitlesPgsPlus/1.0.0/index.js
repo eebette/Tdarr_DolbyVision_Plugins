@@ -96,7 +96,9 @@
             child.on("close", (code) => {
                 if (timer) clearTimeout(timer);
                 if (code === 0) return resolve();
-                reject(new Error(`${program} exited with code ${code}`));
+                const err = new Error(`${program} exited with code ${code}`);
+                err.exitCode = code;
+                reject(err);
             });
         });
     }
@@ -463,6 +465,15 @@
                 try {
                     await runProcess(cmdParts, jobLog, 0);
                 } catch (err) {
+                    if (err.exitCode === 69) {
+                        // EX_UNAVAILABLE from PgsToSrtPlus preflight: Ollama endpoint down or
+                        // model missing. No track can succeed — fail the flow loudly instead
+                        // of silently producing a subtitle-less variant (2026-08-10..13 outage).
+                        log(jobLog, `  🚨 PgsToSrtPlus preflight failed: OCR backend unavailable (exit 69).`);
+                        throw new Error(
+                            "PgsToSrtPlus: Ollama OCR backend unavailable (exit 69) — failing flow instead of extracting nothing. "
+                            + "Check Ollama on the desktop (see xyops 'Ollama watcher') and requeue.");
+                    }
                     log(jobLog, `  🚨 PgsToSrtPlus failed for track idx=${ffmpegIdx} (pgs#${pgsIdx}): ${err.message}`);
                     log(jobLog, `  ⏭ Skipping to next track...`);
                     continue;
