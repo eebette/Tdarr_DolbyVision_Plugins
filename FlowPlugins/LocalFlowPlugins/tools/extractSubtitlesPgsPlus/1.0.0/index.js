@@ -80,7 +80,12 @@
 
             child.on("error", (err) => {
                 if (timer) clearTimeout(timer);
-                reject(new Error(`Failed to start ${program}: ${err.message}`));
+                // spawn() itself failed (EACCES / ENOENT / EPERM): the binary is missing or not
+                // executable in this node's container. Flag it so the caller can fail fast.
+                const spawnErr = new Error(`Failed to start ${program}: ${err.message}`);
+                spawnErr.spawnFailed = true;
+                spawnErr.code = err.code;
+                reject(spawnErr);
             });
 
             child.stdout.on("data", (data) => {
@@ -334,6 +339,8 @@
         const exportsFile = path.join(workDir, `${baseName}_subtitles.exports`);
         fs.writeFileSync(exportsFile, ""); // clear or create
         const manifestEntries = [];
+        let pgsTracksAttempted = 0;
+        let pgsTracksFailed = 0;
 
         // --- Process each requested language ---
         for (const lang of requestedLangs) {
@@ -434,6 +441,7 @@
             log(jobLog, `  🖼 Running PgsToSrtPlus on ${tracksToExtract.length} PGS track(s) for ${lang}`);
 
             for (const s of tracksToExtract) {
+                pgsTracksAttempted += 1;
                 const ffmpegIdx = s.index;
                 const pgsIdx = pgsRelativeIndexMap.get(ffmpegIdx);
                 const title = s.tags?.title || "";
@@ -474,8 +482,19 @@
                             "PgsToSrtPlus: Ollama OCR backend unavailable (exit 69) — failing flow instead of extracting nothing. "
                             + "Check Ollama on the desktop (see xyops 'Ollama watcher') and requeue.");
                     }
+                    if (err.spawnFailed) {
+                        // The docker/PgsToSrtPlus binary could not even be started (e.g. EACCES
+                        // after an SELinux relabel of the shared docker CLI bind mount, Speed
+                        // MHPZEx-uD 2026-09-01). No track on this node can succeed — fail the
+                        // flow loudly instead of silently producing a subtitle-less variant.
+                        log(jobLog, `  🚨 PgsToSrtPlus could not be started: ${err.message}`);
+                        throw new Error(
+                            `PgsToSrtPlus: cannot start "${runCmdParts[0]}" (${err.code || "spawn error"}) — failing flow instead of extracting nothing. `
+                            + "Check the docker binary / permissions on this Tdarr node and requeue.");
+                    }
                     log(jobLog, `  🚨 PgsToSrtPlus failed for track idx=${ffmpegIdx} (pgs#${pgsIdx}): ${err.message}`);
                     log(jobLog, `  ⏭ Skipping to next track...`);
+                    pgsTracksFailed += 1;
                     continue;
                 }
 
@@ -502,6 +521,7 @@
 
                 if (!outputReady) {
                     log(jobLog, `  🚫 PgsToSrtPlus produced no output for track idx=${ffmpegIdx}`);
+                    pgsTracksFailed += 1;
                     continue;
                 }
 
@@ -522,6 +542,16 @@
                     isImageBased: true,
                 });
             }
+        }
+
+        // --- Every PGS track we tried failed: the OCR backend is effectively down on this node
+        //     (exit-code-1 storms, dind unreachable, ...). Partial failures still pass through,
+        //     but a clean sweep means a silently subtitle-less variant — fail the flow instead. ---
+        if (pgsTracksAttempted > 0 && pgsTracksFailed === pgsTracksAttempted) {
+            log(jobLog, `  🚨 All ${pgsTracksAttempted} PGS track(s) failed OCR — failing flow.`);
+            throw new Error(
+                `PgsToSrtPlus: all ${pgsTracksAttempted} PGS track(s) failed — failing flow instead of extracting nothing. `
+                + "Check PgsToSrtPlus / docker / Ollama on this Tdarr node and requeue.");
         }
 
         // --- If the default subtitle is image-based and a same-language text alternative
