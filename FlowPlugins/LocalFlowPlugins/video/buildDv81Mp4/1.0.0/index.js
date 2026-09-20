@@ -106,6 +106,48 @@
         });
     }
 
+    // Read chapters from the source container via ffprobe. Returns [{start, title}].
+    function readChapters(inputPath) {
+        return new Promise((resolve, reject) => {
+            const child = spawn("ffprobe", ["-v", "error", "-show_chapters", "-of", "json", inputPath], {stdio: "pipe"});
+            let stdout = "";
+            let stderr = "";
+            child.on("error", (err) => reject(new Error(`Failed to start ffprobe: ${err.message}`)));
+            child.stdout.on("data", (data) => { stdout += data.toString(); });
+            child.stderr.on("data", (data) => { stderr += data.toString(); });
+            child.on("close", (code) => {
+                if (code !== 0) return reject(new Error(`ffprobe -show_chapters exited with code ${code}: ${stderr.trim()}`));
+                try {
+                    const chapters = (JSON.parse(stdout).chapters || []).map((c, i) => ({
+                        start: parseFloat(c.start_time || 0),
+                        title: String(c.tags?.title || `Chapter ${i + 1}`).replace(/[\r\n]+/g, " ").trim(),
+                    }));
+                    resolve(chapters);
+                } catch (err) {
+                    reject(new Error(`Failed to parse ffprobe chapter output: ${err.message}`));
+                }
+            });
+        });
+    }
+
+    // Write chapters in the Nero simple text format MP4Box -chap reads:
+    //   CHAPTER01=00:10:01.120
+    //   CHAPTER01NAME=Chapter 1
+    function writeNeroChapters(chapters, filePath) {
+        const lines = [];
+        chapters.forEach((c, i) => {
+            const totalMs = Math.max(0, Math.round(c.start * 1000));
+            const h = Math.floor(totalMs / 3600000);
+            const m = Math.floor((totalMs % 3600000) / 60000);
+            const s = Math.floor((totalMs % 60000) / 1000);
+            const ms = totalMs % 1000;
+            const n = String(i + 1).padStart(2, "0");
+            lines.push(`CHAPTER${n}=${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(ms).padStart(3, "0")}`);
+            lines.push(`CHAPTER${n}NAME=${c.title}`);
+        });
+        fs.writeFileSync(filePath, lines.join("\n") + "\n", "utf-8");
+    }
+
     const details = () => ({
         name: "Build DV8.1 MP4",
         description: "Remux DV8.1 BL, audio, and subtitles into MP4 via MP4Box.",
@@ -272,7 +314,10 @@
             const convMark = isConverted ? " (Converted)" : "";
             const name = formatNameFlag(buildAudioTitle(title, lang, newCodec), convMark);
 
-            mp4Args.push("-add", `${filePath}${langFlag}${delayFlag}${name}`);
+            // #audio: import only the audio track(s). Containerised exports (.m4a from the
+            // FLAC->ALAC branch) also carry a chapter text track that MP4Box would otherwise
+            // import as a junk subtitle track named after the audio.
+            mp4Args.push("-add", `${filePath}#audio${langFlag}${delayFlag}${name}`);
 
             const delayInfo = delayMs > 0 ? ` | delay=${delaySeconds.toFixed(3)}s (${delayMs}ms)` : "";
             log(jobLog, `🎧 Audio: ${filename} | lang=${lang} | converted=${isConverted}${delayInfo}`);
@@ -312,6 +357,19 @@
             log(jobLog, `ℹ RPU file provided: ${rpuFilePath} (not directly consumed by MP4Box command)`);
         }
 
+        // --- Chapters ---
+        // Carry the source container's chapters over as a Nero chapter list (chpl box).
+        const chapters = await readChapters(inputPath);
+        let chaptersFile = "";
+        if (chapters.length > 0) {
+            chaptersFile = path.join(workDir, `${baseName}_chapters.txt`);
+            writeNeroChapters(chapters, chaptersFile);
+            mp4Args.push("-chap", chaptersFile);
+            log(jobLog, `📑 Chapters: ${chapters.length} from source container`);
+        } else {
+            log(jobLog, "📑 Chapters: none in source container");
+        }
+
         log(jobLog, `MP4Box: ${mp4boxPath} args: ${mp4Args.join(" ")}`);
 
         try {
@@ -331,6 +389,7 @@
             toDelete.add(audioExportsFile);
             if (subtitleExists) toDelete.add(subtitleExportsFile);
             if (rpuFilePath) toDelete.add(rpuFilePath);
+            if (chaptersFile) toDelete.add(chaptersFile);
 
             audioLines.forEach((line) => {
                 const [filename] = line.split("|");
