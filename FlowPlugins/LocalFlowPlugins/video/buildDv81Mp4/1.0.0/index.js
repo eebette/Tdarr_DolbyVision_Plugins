@@ -247,7 +247,15 @@
         const mp4Args = ["-new", outputFile];
 
         // --- Video Track ---
-        mp4Args.push("-add", `${blHevc}#video:dvp=8.1`);
+        // Raw Annex-B carries no timestamps. Without :fps MP4Box takes the rate from the
+        // SPS VUI (or 25 Hz if absent). Use the source container's declared rate instead.
+        const videoStream = (inputFileObj.ffProbeData?.streams || []).find((s) => s.codec_type === "video");
+        const fps = videoStream?.avg_frame_rate;
+        if (!/^[1-9]\d*\/[1-9]\d*$/.test(fps || "")) {
+            throw new Error(`Source container declares no video frame rate (avg_frame_rate=${fps}); refusing to guess`);
+        }
+        log(jobLog, `🎬 Video: ${blHevc} | fps=${fps} (container)`);
+        mp4Args.push("-add", `${blHevc}#video:dvp=8.1:fps=${fps}`);
 
         // --- Audio Tracks ---
         audioLines.forEach((line) => {
