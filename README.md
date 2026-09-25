@@ -58,6 +58,7 @@ Prereqs: `curl` or `wget`, and `tar` (standard on most distros).
 - `tools/extractSubtitlesPgsPlus`: Extracts subtitles for requested languages, preferring text codecs (via ffmpeg) and OCR-ing PGS to SRT with PgsToSrtPlus only when no non-commentary text subtitles exist for a language, writing `subtitles.exports`. **Strictly depends on [PgsToSrtPlus](https://github.com/eebette/PgsToSrtPlus/tree/master) for OCR** — see [PgsToSrtPlus dependency](#pgstosrtplus-dependency-extractsubtitlespgsplus).
 - `tools/fixEnglishSubtitles`: Cleans common English OCR errors in SRT files listed in `subtitles.exports` with conservative (but common) character/word fixes.
 - `tools/cleanupDvCache`: Cleans up temporary Dolby Vision processing files from the cache directory.
+- `tools/arrManualImport`: Hands the finished file to Radarr/Sonarr's Manual Import command (move mode). The arr parses the file, names it from its own naming policy and mediainfo, moves it into the library in one step and replaces the previous file. Nothing is guessed: series/movie, episodes, quality, languages and release group all come from the arr's own parse, and any rejection fails the flow. Replaces the copy → notify → rename → notify → cleanup chain, so watchers and Bazarr never see an interim name.
 
 #### dovi_tool Conversion Modes
 The `convertHevc` plugin supports the following dovi_tool modes:
