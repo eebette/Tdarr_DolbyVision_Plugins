@@ -173,7 +173,8 @@
 
         const filePath = args.inputFileObj._id;
         if (!fs.existsSync(filePath)) throw new Error(`Working file not found: ${filePath}`);
-        log(jobLog, `📄 File: ${filePath}`);
+        const sourceSize = fs.statSync(filePath).size;
+        log(jobLog, `📄 File: ${filePath} (${sourceSize} bytes)`);
         log(jobLog, `🔗 ${arr} at ${host} | mode=${importMode}`);
 
         // 1. Let the arr parse the file. Passing the file path (not its folder) returns exactly this file.
@@ -213,13 +214,23 @@
         log(jobLog, `🚚 Manual import queued (command ${cmd.id})`);
         await waitForCommand(jobLog, host, headers, cmd.id, timeoutMs);
 
-        // 3. Ask the arr where the file ended up.
+        // 3. Ask the arr where the file ended up, then confirm that file is ours by size.
+        // Nodes may see the library over NFS, where a just-renamed path can stay visible
+        // for a while, so the old path is not evidence of anything; the new path's size is.
         const res = await httpJson("GET", lookupUrl, headers);
         const newPath = arr === "sonarr" ? res.episodeFile?.path : res.movieFile?.path;
         if (!newPath) throw new Error(`${arr} reports no file for the imported item after the command completed`);
-        if (!fs.existsSync(newPath)) throw new Error(`${arr} reports the file at ${newPath} but it is not visible from this node`);
+        let newSize = -1;
+        for (let attempt = 0; attempt < 15; attempt += 1) {
+            try { newSize = fs.statSync(newPath).size; } catch (_) { newSize = -1; }
+            if (newSize === sourceSize) break;
+            await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+        }
+        if (newSize !== sourceSize) {
+            throw new Error(`${arr} reports the file at ${newPath} but this node sees size ${newSize}, expected ${sourceSize}`);
+        }
         if (importMode === "move" && fs.existsSync(filePath)) {
-            throw new Error(`Import completed but the working file still exists at ${filePath}; expected a move`);
+            log(jobLog, `⚠ Working file still visible at ${filePath} after the move (stale network cache or copy fallback); the cache is cleaned at job end`);
         }
         log(jobLog, `✅ Imported as: ${newPath}`);
         log(jobLog, "=== Arr Manual Import End ===");
