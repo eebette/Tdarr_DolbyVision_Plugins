@@ -184,8 +184,13 @@
         const item = items.find((i) => i.path === filePath) || (items.length === 1 ? items[0] : null);
         if (!item) throw new Error(`${arr} did not return a manual import item for ${filePath} (got ${items.length} items)`);
 
-        const rejections = (item.rejections || []).map((r) => r.reason || JSON.stringify(r));
-        if (rejections.length) throw new Error(`${arr} rejected the file: ${rejections.join("; ")}`);
+        // Rejections here are the arr's automatic-import verdicts (e.g. "Not a Custom Format
+        // upgrade"). Manual import is allowed to override them, and this flow always replaces
+        // the previous variant, so they are logged, not fatal. What must be present is a
+        // resolved series/movie, episode and quality; the post-import size check catches a
+        // command that completed without importing.
+        const rejections = (item.rejections || []).map((r) => `${r.reason || JSON.stringify(r)}${r.type ? ` [${r.type}]` : ""}`);
+        rejections.forEach((r) => log(jobLog, `⚠ ${arr} rejection (overridden by manual import): ${r}`));
         const qualityName = item.quality?.quality?.name;
         if (!qualityName) throw new Error(`${arr} could not determine quality for ${filePath}`);
 
