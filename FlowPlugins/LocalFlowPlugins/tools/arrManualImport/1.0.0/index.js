@@ -20,10 +20,20 @@
      */
 
     const fs = require("fs");
+    const path = require("path");
     const http = require("http");
     const https = require("https");
 
     const POLL_INTERVAL_MS = 2000;
+
+    // First [tvdbid-N]/[tmdbid-N] tag found across the given names, as a number.
+    function idTag(re, ...names) {
+        for (const n of names) {
+            const m = re.exec(n || "");
+            if (m) return Number(m[1]);
+        }
+        return null;
+    }
 
     function log(jobLog, msg) {
         jobLog(msg);
@@ -194,21 +204,62 @@
         const qualityName = item.quality?.quality?.name;
         if (!qualityName) throw new Error(`${arr} could not determine quality for ${filePath}`);
 
+        // Item identity. Title parsing alone fails on some names the arr itself produced
+        // (e.g. "WAR (2026) [tvdbid-467092] - S01E01": the tag glues onto the title and the
+        // TVDB title carries the year). The ID tag in the name is authoritative, so use it
+        // when present and treat the parse-based match as a cross-check.
+        const baseName = path.basename(filePath);
+        const originalName = path.basename(String(args.originalLibraryFile?._id || ""));
         let file;
         let lookupUrl;
         if (arr === "sonarr") {
-            const seriesId = item.series?.id;
-            const episodeIds = (item.episodes || []).map((e) => e.id);
+            const tvdbId = idTag(/\[tvdbid-(\d+)\]/i, baseName, originalName);
+            let seriesId = item.series?.id;
+            let episodeIds = (item.episodes || []).map((e) => e.id);
+            let label = item.series ? `${item.series.title} S${String(item.seasonNumber).padStart(2, "0")} E${(item.episodes || []).map((e) => e.episodeNumber).join(",")}` : "";
+            if (tvdbId) {
+                const series = await httpJson("GET", `${host}/api/v3/series?tvdbId=${tvdbId}`, headers);
+                const s = Array.isArray(series) ? series[0] : null;
+                if (!s?.id) throw new Error(`sonarr has no series with tvdbId ${tvdbId} (from "${baseName}")`);
+                if (seriesId && seriesId !== s.id) throw new Error(`sonarr title match (series ${seriesId}) disagrees with tvdbId ${tvdbId} (series ${s.id})`);
+                seriesId = s.id;
+                if (!episodeIds.length) {
+                    const parsed = await httpJson("GET", `${host}/api/v3/parse?title=${encodeURIComponent(baseName)}`, headers);
+                    const pi = parsed?.parsedEpisodeInfo || {};
+                    const season = pi.seasonNumber;
+                    const numbers = pi.episodeNumbers || [];
+                    if (season === undefined || season === null || !numbers.length) {
+                        throw new Error(`sonarr could not parse season/episode from "${baseName}"`);
+                    }
+                    const eps = await httpJson("GET", `${host}/api/v3/episode?seriesId=${seriesId}&seasonNumber=${season}`, headers);
+                    episodeIds = numbers.map((n) => {
+                        const e = (eps || []).find((x) => x.episodeNumber === n);
+                        if (!e) throw new Error(`sonarr series ${s.title} has no S${String(season).padStart(2, "0")}E${String(n).padStart(2, "0")}`);
+                        return e.id;
+                    });
+                    label = `${s.title} S${String(season).padStart(2, "0")} E${numbers.join(",")} (via tvdbId ${tvdbId})`;
+                }
+            }
             if (!seriesId || !episodeIds.length) {
                 throw new Error(`sonarr could not match the file to a series/episode (series=${seriesId}, episodes=${episodeIds.length})`);
             }
-            log(jobLog, `🎯 ${item.series.title} S${String(item.seasonNumber).padStart(2, "0")} episodes ${item.episodes.map((e) => e.episodeNumber).join(",")} | ${qualityName} | ${item.releaseGroup || "no group"}`);
+            log(jobLog, `🎯 ${label} | ${qualityName} | ${item.releaseGroup || "no group"}`);
             file = { path: filePath, seriesId, episodeIds, quality: item.quality, languages: item.languages || [], releaseGroup: item.releaseGroup || "", indexerFlags: item.indexerFlags || 0 };
             lookupUrl = `${host}/api/v3/episode/${episodeIds[0]}`;
         } else {
-            const movieId = item.movie?.id;
+            const tmdbId = idTag(/\[tmdbid-(\d+)\]/i, baseName, originalName);
+            let movieId = item.movie?.id;
+            let label = item.movie ? `${item.movie.title} (${item.movie.year})` : "";
+            if (tmdbId) {
+                const movies = await httpJson("GET", `${host}/api/v3/movie?tmdbId=${tmdbId}`, headers);
+                const m = Array.isArray(movies) ? movies[0] : null;
+                if (!m?.id) throw new Error(`radarr has no movie with tmdbId ${tmdbId} (from "${baseName}")`);
+                if (movieId && movieId !== m.id) throw new Error(`radarr title match (movie ${movieId}) disagrees with tmdbId ${tmdbId} (movie ${m.id})`);
+                movieId = m.id;
+                label = `${m.title} (${m.year}) (via tmdbId ${tmdbId})`;
+            }
             if (!movieId) throw new Error("radarr could not match the file to a movie");
-            log(jobLog, `🎯 ${item.movie.title} (${item.movie.year}) | ${qualityName} | ${item.releaseGroup || "no group"}`);
+            log(jobLog, `🎯 ${label} | ${qualityName} | ${item.releaseGroup || "no group"}`);
             file = { path: filePath, movieId, quality: item.quality, languages: item.languages || [], releaseGroup: item.releaseGroup || "", indexerFlags: item.indexerFlags || 0 };
             lookupUrl = `${host}/api/v3/movie/${movieId}`;
         }
