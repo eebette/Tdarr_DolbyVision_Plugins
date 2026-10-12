@@ -475,18 +475,15 @@
                 } catch (err) {
                     if (err.exitCode === 69) {
                         // EX_UNAVAILABLE from PgsToSrtPlus preflight: Ollama endpoint down or
-                        // model missing. No track can succeed — fail the flow loudly instead
-                        // of silently producing a subtitle-less variant (2026-08-10..13 outage).
+                        // model missing. No track can succeed; fail loud, no subtitle-less variant.
                         log(jobLog, `  🚨 PgsToSrtPlus preflight failed: OCR backend unavailable (exit 69).`);
                         throw new Error(
                             "PgsToSrtPlus: Ollama OCR backend unavailable (exit 69) — failing flow instead of extracting nothing. "
-                            + "Check Ollama on the desktop (see xyops 'Ollama watcher') and requeue.");
+                            + `Check that the Ollama endpoint "${ollamaUrl || "(Ollama URL not set)"}" is reachable and the model is pulled, then requeue.`);
                     }
                     if (err.spawnFailed) {
-                        // The docker/PgsToSrtPlus binary could not even be started (e.g. EACCES
-                        // after an SELinux relabel of the shared docker CLI bind mount, Speed
-                        // MHPZEx-uD 2026-09-01). No track on this node can succeed — fail the
-                        // flow loudly instead of silently producing a subtitle-less variant.
+                        // docker/PgsToSrtPlus binary could not start (e.g. EACCES on the docker
+                        // CLI). No track on this node can succeed; fail loud, no subtitle-less variant.
                         log(jobLog, `  🚨 PgsToSrtPlus could not be started: ${err.message}`);
                         throw new Error(
                             `PgsToSrtPlus: cannot start "${runCmdParts[0]}" (${err.code || "spawn error"}) — failing flow instead of extracting nothing. `

@@ -29,7 +29,7 @@
       "fpEnabled": true,
       "inputsDB": {
         "languages": "eng,jpn",
-        "ollamaUrl": "http://192.168.10.100:11434",
+        "ollamaUrl": "http://127.0.0.1:11434",
         "extractAllPgs": "true",
         "pgsToSrtPlusCommand": "docker run --rm --pull always -v /media:/media --network host ebette1/pgs-to-srt-plus:latest",
         "preferTextDefault": "true",
@@ -276,7 +276,7 @@
       "fpEnabled": true,
       "inputsDB": {
         "languages": "eng,jpn",
-        "ollamaUrl": "http://192.168.10.100:11434",
+        "ollamaUrl": "http://127.0.0.1:11434",
         "extractAllPgs": "true",
         "pgsToSrtPlusCommand": "docker run --rm --pull always -v /media:/media --network host ebette1/pgs-to-srt-plus:latest",
         "preferTextDefault": "true",
