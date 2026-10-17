@@ -173,7 +173,7 @@
                 const copyArgs = [
                     "-i", inputPath,
                     "-c:v", "copy",
-                    "-bsf:v", "hevc_metadata=colour_primaries=9:transfer_characteristics=16:matrix_coefficients=9:video_full_range_flag=0,hevc_mp4toannexb",
+                    "-bsf:v", "hevc_mp4toannexb",
                     blHevcPath,
                 ];
 
